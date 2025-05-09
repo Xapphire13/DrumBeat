@@ -22,7 +22,17 @@ body {
     display: flex;
 }
 
-.staff {
+.staff-container {
+    position: relative;
     background: white;
     color: black;
+    height: 96px;
+    display: flex;
+}
+
+.staff {
+    position: absolute;
+    left: 0;
+    top: 0;
+    stroke: black;
 }
