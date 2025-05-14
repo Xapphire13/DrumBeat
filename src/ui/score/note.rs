@@ -15,6 +15,7 @@ pub enum Surface {
     FloorTom,
     Crash,
     Ride,
+    Kick,
 }
 
 #[derive(Clone, PartialEq)]
