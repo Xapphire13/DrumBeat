@@ -20,6 +20,7 @@ impl MeasureScale {
     }
 
     pub fn get_y(&self, line_number: f32) -> f32 {
+        // Note: we subtract from `self.height` because SVG's draw from the top
         self.y_baseline - self.line_height * line_number
     }
 
@@ -35,18 +36,29 @@ impl MeasureScale {
                 NoteValue::Thirtysecondth => (note.offset as f32) * width / 32.,
             };
 
-        // Note: we subtract from `self.height` because SVG's draw from the top
-        let y_pos = match note.surface {
-            Surface::Snare => self.get_y(2.),
-            Surface::Hihat => self.get_y(4.),
-            Surface::Tom1 => self.get_y(3.),
-            Surface::Tom2 => self.get_y(2.5),
-            Surface::FloorTom => self.get_y(1.),
-            Surface::Crash => self.get_y(4.5),
-            Surface::Ride => self.get_y(3.5),
-            Surface::Kick => self.get_y(0.),
-        };
+        let y_pos = self.get_y(self.get_surface_line_number(&note.surface));
 
         Position { x: x_pos, y: y_pos }
+    }
+
+    pub fn get_beam_line_number(&self, note_value: NoteValue) -> f32 {
+        match note_value {
+            NoteValue::Quarter | NoteValue::Eighth => 6.,
+            NoteValue::Sixteenth => 6.5,
+            NoteValue::Thirtysecondth => 7.,
+        }
+    }
+
+    fn get_surface_line_number(&self, surface: &Surface) -> f32 {
+        match surface {
+            Surface::Snare => 2.0,
+            Surface::Hihat => 4.0,
+            Surface::Tom1 => 3.0,
+            Surface::Tom2 => 2.5,
+            Surface::FloorTom => 1.0,
+            Surface::Crash => 4.5,
+            Surface::Ride => 3.5,
+            Surface::Kick => 0.0,
+        }
     }
 }
