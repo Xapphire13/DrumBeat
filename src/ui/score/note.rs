@@ -15,13 +15,40 @@ pub fn Note(
     scale: MeasureScale,
 ) -> Element {
     let Position { x, y } = position;
+    // Minus 2 to account for the line stroke
+    let size = (scale.line_height - 2.) / 2.;
 
-    rsx! {
-        circle {
-            // Minus 2 to account for the line stroke
-            r: (scale.line_height - 2.) / 2.,
-            cx: x,
-            cy: y,
+    match surface {
+        Surface::Hihat => {
+            rsx! {
+                g {
+                    line {
+                        x1: x - size,
+                        y1: y - size,
+                        x2: x + size,
+                        y2: y + size,
+                        stroke: "black",
+                        stroke_width: 1.5,
+                    }
+                    line {
+                        x1: x - size,
+                        y1: y + size,
+                        x2: x + size,
+                        y2: y - size,
+                        stroke: "black",
+                        stroke_width: 1.5,
+                    }
+                }
+            }
+        }
+        _ => {
+            rsx! {
+                circle {
+                    r: size,
+                    cx: x,
+                    cy: y,
+                }
+            }
         }
     }
 }
