@@ -1,4 +1,7 @@
-use super::note::{Note, NoteValue, Surface};
+use crate::data::{
+    note::{Note, NoteValue, Surface},
+    position::Position,
+};
 
 #[derive(Clone, PartialEq)]
 pub struct MeasureScale {
@@ -20,7 +23,7 @@ impl MeasureScale {
         self.y_baseline - self.line_height * line_number
     }
 
-    pub fn get_position(&self, note: &Note) -> (f32, f32) {
+    pub fn get_position(&self, note: &Note) -> Position {
         let (x_min, x_max) = self.x_range;
         let width = x_max - x_min;
         let mut x_pos = x_min;
@@ -36,7 +39,7 @@ impl MeasureScale {
         // Note: we subtract from `self.height` because SVG's draw from the top
         match note.surface {
             Surface::Snare => y_pos = self.get_y(2.),
-            Surface::Highhat => y_pos = self.get_y(4.),
+            Surface::Hihat => y_pos = self.get_y(4.),
             Surface::Tom1 => y_pos = self.get_y(3.),
             Surface::Tom2 => y_pos = self.get_y(2.5),
             Surface::FloorTom => y_pos = self.get_y(1.),
@@ -45,6 +48,6 @@ impl MeasureScale {
             Surface::Kick => y_pos = self.get_y(0.),
         }
 
-        (x_pos, y_pos)
+        Position { x: x_pos, y: y_pos }
     }
 }

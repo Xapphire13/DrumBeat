@@ -1,11 +1,9 @@
 use dioxus::prelude::*;
 
-use crate::ui::score::{
-    measure_scale::MeasureScale,
-    note::{Note, NoteValue, Surface},
+use crate::{
+    data::note::{Note, NoteValue, Surface},
+    ui::score::{measure::Measure, measure_scale::MeasureScale},
 };
-
-use super::measure::Measure;
 
 #[component]
 pub fn Staff() -> Element {
@@ -23,33 +21,63 @@ pub fn Staff() -> Element {
         vec![
             Note {
                 value: NoteValue::Quarter,
-                surface: Surface::Snare,
+                surface: Surface::Kick,
+                offset: 0,
+            },
+            Note {
+                value: NoteValue::Quarter,
+                surface: Surface::Hihat,
                 offset: 0,
             },
             Note {
                 value: NoteValue::Eighth,
+                surface: Surface::Hihat,
+                offset: 1,
+            },
+            Note {
+                value: NoteValue::Quarter,
                 surface: Surface::Snare,
                 offset: 1,
             },
             Note {
-                value: NoteValue::Sixteenth,
+                value: NoteValue::Quarter,
+                surface: Surface::Hihat,
+                offset: 1,
+            },
+            Note {
+                value: NoteValue::Eighth,
+                surface: Surface::Hihat,
+                offset: 3,
+            },
+            Note {
+                value: NoteValue::Quarter,
+                surface: Surface::Kick,
+                offset: 2,
+            },
+            Note {
+                value: NoteValue::Quarter,
+                surface: Surface::Hihat,
+                offset: 2,
+            },
+            Note {
+                value: NoteValue::Eighth,
+                surface: Surface::Hihat,
+                offset: 5,
+            },
+            Note {
+                value: NoteValue::Quarter,
                 surface: Surface::Snare,
                 offset: 3,
             },
             Note {
-                value: NoteValue::Thirtysecondth,
-                surface: Surface::Snare,
+                value: NoteValue::Quarter,
+                surface: Surface::Hihat,
+                offset: 3,
+            },
+            Note {
+                value: NoteValue::Eighth,
+                surface: Surface::Hihat,
                 offset: 7,
-            },
-            Note {
-                value: NoteValue::Quarter,
-                surface: Surface::Snare,
-                offset: 1,
-            },
-            Note {
-                value: NoteValue::Quarter,
-                surface: Surface::Snare,
-                offset: 3,
             },
         ],
         vec![
@@ -126,7 +154,7 @@ pub fn Staff() -> Element {
                             let left_bound = (i as f32) * width() as f32 / num_measures;
                             let right_bound = (i as f32 + 1.) * width() as f32 / num_measures;
                             let scale = MeasureScale::new(
-                                (left_bound + 1.5 * line_height, right_bound - 1.5 * line_height),
+                                (left_bound + 1.5 * line_height, right_bound),
                                 height() as f32 - 1.5 * line_height,
                                 line_height,
                             );

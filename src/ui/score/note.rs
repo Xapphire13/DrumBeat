@@ -1,26 +1,27 @@
-#[derive(Clone, PartialEq)]
-pub enum NoteValue {
-    Quarter,
-    Eighth,
-    Sixteenth,
-    Thirtysecondth,
-}
+use dioxus::prelude::*;
 
-#[derive(Clone, PartialEq)]
-pub enum Surface {
-    Snare,
-    Highhat,
-    Tom1,
-    Tom2,
-    FloorTom,
-    Crash,
-    Ride,
-    Kick,
-}
+use crate::data::{
+    note::{NoteValue, Surface},
+    position::Position,
+};
 
-#[derive(Clone, PartialEq)]
-pub struct Note {
-    pub value: NoteValue,
-    pub surface: Surface,
-    pub offset: u8,
+use super::measure_scale::MeasureScale;
+
+#[component]
+pub fn Note(
+    value: NoteValue,
+    surface: Surface,
+    position: Position,
+    scale: MeasureScale,
+) -> Element {
+    let Position { x, y } = position;
+
+    rsx! {
+        circle {
+            // Minus 2 to account for the line stroke
+            r: (scale.line_height - 2.) / 2.,
+            cx: x,
+            cy: y,
+        }
+    }
 }

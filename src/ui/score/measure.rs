@@ -1,22 +1,24 @@
 use dioxus::prelude::*;
 
-use super::{measure_scale::MeasureScale, note::Note};
+use crate::{data::note::Note as NoteData, ui::score::note::Note};
+
+use super::measure_scale::MeasureScale;
 
 #[component]
-pub fn Measure(scale: MeasureScale, notes: Vec<Note>) -> Element {
+pub fn Measure(scale: MeasureScale, notes: Vec<NoteData>) -> Element {
     rsx! {
         g {
             {
                 notes
                     .iter()
                     .map(|note| {
-                        let (x, y) = scale.get_position(note);
+                        let position = scale.get_position(note);
                         rsx! {
-                            circle {
-                                // Minus 2 to account for the line stroke
-                                r: (scale.line_height - 2.) / 2.,
-                                cx: x,
-                                cy: y,
+                            Note {
+                                value: note.value.clone(),
+                                surface: note.surface.clone(),
+                                position,
+                                scale: scale.clone(),
                             }
                         }
                     })

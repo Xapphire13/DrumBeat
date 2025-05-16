@@ -1,6 +1,7 @@
 use dioxus_desktop::{Config, WindowBuilder};
 use ui::app::App;
 
+mod data;
 mod ui;
 
 fn main() {
