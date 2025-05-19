@@ -3,13 +3,15 @@ use std::rc::Rc;
 use dioxus::prelude::*;
 use midir::MidiInput;
 
-use crate::ui::{score::Score, toolbar::Toolbar};
+use crate::ui::{app_mode::AppMode, score::Score, toolbar::Toolbar};
 
 const FAVICON: Asset = asset!("/assets/favicon.ico");
 const MAIN_CSS: Asset = asset!("/assets/main.css");
 
 #[component]
 pub fn App() -> Element {
+    use_context_provider(|| Signal::new(AppMode::View));
+
     let mut midi_output = use_signal_sync(|| "".to_string());
     let _midi_connection = use_hook(|| {
         let midi_in = MidiInput::new("DrumBeat").unwrap();

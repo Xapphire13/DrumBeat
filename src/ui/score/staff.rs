@@ -1,7 +1,10 @@
-use dioxus::prelude::*;
+use dioxus::{html::geometry::euclid::Point2D, prelude::*};
 
 use crate::{
-    data::note::{Note, NoteValue, Surface},
+    data::{
+        note::{Note, NoteValue, Surface},
+        position::Position,
+    },
     ui::score::{measure::Measure, measure_scale::MeasureScale},
 };
 
@@ -9,8 +12,21 @@ use crate::{
 pub fn Staff() -> Element {
     let mut width = use_signal(|| 0i32);
     let mut height = use_signal(|| 0i32);
+    let mut mouse_position = use_signal::<Option<Position>>(|| None);
 
-    let handleOnResize = move |ev: ResizeEvent| {
+    let handle_on_mouse_move = move |ev: Event<MouseData>| {
+        let Point2D { x, y, .. } = ev.coordinates().element();
+        mouse_position.set(Some(Position {
+            x: x as f32,
+            y: y as f32,
+        }));
+    };
+
+    let handle_on_mouse_leave = move |_: Event<MouseData>| {
+        mouse_position.set(None);
+    };
+
+    let handle_on_resize = move |ev: ResizeEvent| {
         width.set(ev.get_border_box_size().unwrap().width as i32);
         height.set(ev.get_border_box_size().unwrap().height as i32);
     };
@@ -106,7 +122,11 @@ pub fn Staff() -> Element {
     let num_measures = measures.len() as f32;
 
     rsx! {
-        div { class: "staff-container", onresize: handleOnResize,
+        div {
+            class: "staff-container",
+            onresize: handle_on_resize,
+            onmousemove: handle_on_mouse_move,
+            onmouseleave: handle_on_mouse_leave,
             svg { class: "staff", width: "{width}px", height: "{height}px",
 
                 g {
@@ -153,12 +173,25 @@ pub fn Staff() -> Element {
                         .map(|(i, notes)| {
                             let left_bound = (i as f32) * width() as f32 / num_measures;
                             let right_bound = (i as f32 + 1.) * width() as f32 / num_measures;
+                            let padded_left_bound = left_bound + 1.5 * line_height;
+                            let padded_right_bound = right_bound - 0.5 * line_height;
                             let scale = MeasureScale::new(
-                                (left_bound + 1.5 * line_height, right_bound),
+                                (padded_left_bound, padded_right_bound),
                                 height() as f32 - 1.5 * line_height,
                                 line_height,
-                                i as u32 * 256
+                                i as u32 * 256,
                             );
+                            let mouse_position = 'mouse_position: {
+                                if let Some(Position { x, y }) = mouse_position() {
+                                    if x >= left_bound && x < right_bound {
+                                        break 'mouse_position Some(Position {
+                                            x: x - padded_left_bound,
+                                            y,
+                                        });
+                                    }
+                                }
+                                None
+                            };
                             rsx! {
                                 if i > 0 {
                                     line {
@@ -168,7 +201,7 @@ pub fn Staff() -> Element {
                                         y2: "{scale.get_y(3.5)}",
                                     }
                                 }
-                                Measure { scale, notes }
+                                Measure { scale, notes, mouse_position }
                             }
                         })
                 }

@@ -1,7 +1,19 @@
 use dioxus::prelude::*;
 
+use crate::{data::note::NoteValue, ui::app_mode::AppMode};
+
 #[component]
 pub fn EditToolbar() -> Element {
+    let mut app_mode = use_context::<Signal<AppMode>>();
+
+    let handle_on_note_value_pressed = |note_value: NoteValue| {
+        move |_: Event<MouseData>| {
+            app_mode.set(AppMode::Edit {
+                note_value: note_value.clone(),
+            });
+        }
+    };
+
     rsx! {
         div { class: "toolbar",
 
@@ -11,10 +23,12 @@ pub fn EditToolbar() -> Element {
             }
 
             div {
-                button { "1/4" }
-                button { "1/8" }
-                button { "1/16" }
-                button { "1/32" }
+                button { onclick: handle_on_note_value_pressed(NoteValue::Quarter), "1/4" }
+                button { onclick: handle_on_note_value_pressed(NoteValue::Eighth), "1/8" }
+                button { onclick: handle_on_note_value_pressed(NoteValue::Sixteenth), "1/16" }
+                button { onclick: handle_on_note_value_pressed(NoteValue::ThirtySecond),
+                    "1/32"
+                }
             }
         }
     }

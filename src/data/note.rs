@@ -3,7 +3,7 @@ pub enum NoteValue {
     Quarter,
     Eighth,
     Sixteenth,
-    Thirtysecondth,
+    ThirtySecond,
 }
 
 #[derive(Clone, PartialEq)]

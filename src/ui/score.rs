@@ -4,6 +4,7 @@ use staff::Staff;
 mod measure;
 mod measure_scale;
 mod note;
+mod preview_note;
 mod staff;
 
 #[component]

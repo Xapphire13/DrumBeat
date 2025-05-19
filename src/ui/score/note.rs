@@ -58,7 +58,6 @@ pub fn Note(
                 _ => {
                     let ellipse_rx = scale.line_height / 2.0;
                     let ellipse_ry = scale.line_height * 0.3;
-
                     rsx! {
                         // Note body - ellipse (tilted music note)
                         ellipse {
