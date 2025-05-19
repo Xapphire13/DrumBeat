@@ -22,84 +22,84 @@ pub fn Staff() -> Element {
             Note {
                 value: NoteValue::Quarter,
                 surface: Surface::Kick,
-                offset: 0,
+                timestamp: 0,
             },
             Note {
                 value: NoteValue::Quarter,
                 surface: Surface::Hihat,
-                offset: 0,
+                timestamp: 0,
             },
             Note {
                 value: NoteValue::Eighth,
                 surface: Surface::Hihat,
-                offset: 1,
+                timestamp: 32,
             },
             Note {
                 value: NoteValue::Quarter,
                 surface: Surface::Snare,
-                offset: 1,
+                timestamp: 64,
             },
             Note {
                 value: NoteValue::Quarter,
                 surface: Surface::Hihat,
-                offset: 1,
+                timestamp: 64,
             },
             Note {
                 value: NoteValue::Eighth,
                 surface: Surface::Hihat,
-                offset: 3,
+                timestamp: 96,
             },
             Note {
                 value: NoteValue::Quarter,
                 surface: Surface::Kick,
-                offset: 2,
+                timestamp: 128,
             },
             Note {
                 value: NoteValue::Quarter,
                 surface: Surface::Hihat,
-                offset: 2,
+                timestamp: 128,
             },
             Note {
                 value: NoteValue::Eighth,
                 surface: Surface::Hihat,
-                offset: 5,
+                timestamp: 160,
             },
             Note {
                 value: NoteValue::Quarter,
                 surface: Surface::Snare,
-                offset: 3,
+                timestamp: 192,
             },
             Note {
                 value: NoteValue::Quarter,
                 surface: Surface::Hihat,
-                offset: 3,
+                timestamp: 192,
             },
             Note {
                 value: NoteValue::Eighth,
                 surface: Surface::Hihat,
-                offset: 7,
+                timestamp: 224,
             },
         ],
         vec![
             Note {
                 value: NoteValue::Quarter,
                 surface: Surface::Snare,
-                offset: 0,
+                timestamp: 256,
             },
             Note {
                 value: NoteValue::Quarter,
                 surface: Surface::Snare,
-                offset: 1,
+                timestamp: 320,
             },
             Note {
                 value: NoteValue::Quarter,
                 surface: Surface::Snare,
-                offset: 2,
+                timestamp: 384,
             },
             Note {
                 value: NoteValue::Quarter,
                 surface: Surface::Snare,
-                offset: 3,
+                timestamp: 448,
             },
         ],
     ];
@@ -157,6 +157,7 @@ pub fn Staff() -> Element {
                                 (left_bound + 1.5 * line_height, right_bound),
                                 height() as f32 - 1.5 * line_height,
                                 line_height,
+                                i as u32 * 256
                             );
                             rsx! {
                                 if i > 0 {

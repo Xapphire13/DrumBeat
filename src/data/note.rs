@@ -22,5 +22,6 @@ pub enum Surface {
 pub struct Note {
     pub value: NoteValue,
     pub surface: Surface,
-    pub offset: u8,
+    /** Where the note is within the score, measured by the number of 256th notes since the beginning */
+    pub timestamp: u32,
 }

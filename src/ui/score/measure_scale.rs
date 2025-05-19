@@ -5,17 +5,25 @@ use crate::data::{
 
 #[derive(Clone, PartialEq)]
 pub struct MeasureScale {
+    pub line_height: f32,
+
     x_range: (f32, f32),
     y_baseline: f32,
-    pub line_height: f32,
+    start_timestamp: u32,
 }
 
 impl MeasureScale {
-    pub fn new(x_range: (f32, f32), y_baseline: f32, line_height: f32) -> MeasureScale {
+    pub fn new(
+        x_range: (f32, f32),
+        y_baseline: f32,
+        line_height: f32,
+        start_timestamp: u32,
+    ) -> MeasureScale {
         MeasureScale {
             x_range,
             y_baseline,
             line_height,
+            start_timestamp,
         }
     }
 
@@ -28,13 +36,7 @@ impl MeasureScale {
         let (x_min, x_max) = self.x_range;
         let width = x_max - x_min;
 
-        let x_pos = x_min
-            + match note.value {
-                NoteValue::Quarter => (note.offset as f32) * width / 4.,
-                NoteValue::Eighth => (note.offset as f32) * width / 8.,
-                NoteValue::Sixteenth => (note.offset as f32) * width / 16.,
-                NoteValue::Thirtysecondth => (note.offset as f32) * width / 32.,
-            };
+        let x_pos = x_min + (note.timestamp - self.start_timestamp) as f32 * width / 256.0;
 
         let y_pos = self.get_y(self.get_surface_line_number(&note.surface));
 
