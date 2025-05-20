@@ -1,4 +1,4 @@
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum NoteValue {
     Quarter,
     Eighth,
@@ -6,7 +6,7 @@ pub enum NoteValue {
     ThirtySecond,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum Surface {
     Snare,
     Hihat,
@@ -18,7 +18,7 @@ pub enum Surface {
     Kick,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct Note {
     pub value: NoteValue,
     pub surface: Surface,

@@ -2,6 +2,7 @@ use dioxus::{html::geometry::euclid::Point2D, prelude::*};
 
 use crate::{
     data::{
+        measure::Measure as MeasureData,
         note::{Note, NoteValue, Surface},
         position::Position,
     },
@@ -13,8 +14,103 @@ pub fn Staff() -> Element {
     let mut width = use_signal(|| 0i32);
     let mut height = use_signal(|| 0i32);
     let mut mouse_position = use_signal::<Option<Position>>(|| None);
+    let mut preview_note: Signal<Option<Note>> = use_signal(|| None);
+    let mut measures = use_signal(|| {
+        vec![
+            MeasureData {
+                notes: vec![
+                    Note {
+                        value: NoteValue::Quarter,
+                        surface: Surface::Kick,
+                        timestamp: 0,
+                    },
+                    Note {
+                        value: NoteValue::Quarter,
+                        surface: Surface::Hihat,
+                        timestamp: 0,
+                    },
+                    Note {
+                        value: NoteValue::Eighth,
+                        surface: Surface::Hihat,
+                        timestamp: 32,
+                    },
+                    Note {
+                        value: NoteValue::Quarter,
+                        surface: Surface::Snare,
+                        timestamp: 64,
+                    },
+                    Note {
+                        value: NoteValue::Quarter,
+                        surface: Surface::Hihat,
+                        timestamp: 64,
+                    },
+                    Note {
+                        value: NoteValue::Eighth,
+                        surface: Surface::Hihat,
+                        timestamp: 96,
+                    },
+                    Note {
+                        value: NoteValue::Quarter,
+                        surface: Surface::Kick,
+                        timestamp: 128,
+                    },
+                    Note {
+                        value: NoteValue::Quarter,
+                        surface: Surface::Hihat,
+                        timestamp: 128,
+                    },
+                    Note {
+                        value: NoteValue::Eighth,
+                        surface: Surface::Hihat,
+                        timestamp: 160,
+                    },
+                    Note {
+                        value: NoteValue::Quarter,
+                        surface: Surface::Snare,
+                        timestamp: 192,
+                    },
+                    Note {
+                        value: NoteValue::Quarter,
+                        surface: Surface::Hihat,
+                        timestamp: 192,
+                    },
+                    Note {
+                        value: NoteValue::Eighth,
+                        surface: Surface::Hihat,
+                        timestamp: 224,
+                    },
+                ],
+                timestamp: 0,
+            },
+            MeasureData {
+                timestamp: 256,
+                notes: vec![
+                    Note {
+                        value: NoteValue::Quarter,
+                        surface: Surface::Snare,
+                        timestamp: 256,
+                    },
+                    Note {
+                        value: NoteValue::Quarter,
+                        surface: Surface::Snare,
+                        timestamp: 320,
+                    },
+                    Note {
+                        value: NoteValue::Quarter,
+                        surface: Surface::Snare,
+                        timestamp: 384,
+                    },
+                    Note {
+                        value: NoteValue::Quarter,
+                        surface: Surface::Snare,
+                        timestamp: 448,
+                    },
+                ],
+            },
+        ]
+    });
 
-    let handle_on_mouse_move = move |ev: Event<MouseData>| {
+    let handle_on_mouse_move = move |ev: MouseEvent| {
         let Point2D { x, y, .. } = ev.coordinates().element();
         mouse_position.set(Some(Position {
             x: x as f32,
@@ -22,7 +118,7 @@ pub fn Staff() -> Element {
         }));
     };
 
-    let handle_on_mouse_leave = move |_: Event<MouseData>| {
+    let handle_on_mouse_leave = move |_: MouseEvent| {
         mouse_position.set(None);
     };
 
@@ -31,94 +127,25 @@ pub fn Staff() -> Element {
         height.set(ev.get_border_box_size().unwrap().height as i32);
     };
 
-    let line_height = height() as f32 / 8.;
+    let handle_on_click = move |_: MouseEvent| {
+        if let Some(preview_note) = preview_note() {
+            let updated_measures = measures()
+                .into_iter()
+                .map(|mut measure| {
+                    if measure.timestamp <= preview_note.timestamp
+                        && preview_note.timestamp - measure.timestamp < 256
+                    {
+                        measure.notes.push(preview_note.clone());
+                    }
+                    measure
+                })
+                .collect();
 
-    let measures: [Vec<Note>; 2] = [
-        vec![
-            Note {
-                value: NoteValue::Quarter,
-                surface: Surface::Kick,
-                timestamp: 0,
-            },
-            Note {
-                value: NoteValue::Quarter,
-                surface: Surface::Hihat,
-                timestamp: 0,
-            },
-            Note {
-                value: NoteValue::Eighth,
-                surface: Surface::Hihat,
-                timestamp: 32,
-            },
-            Note {
-                value: NoteValue::Quarter,
-                surface: Surface::Snare,
-                timestamp: 64,
-            },
-            Note {
-                value: NoteValue::Quarter,
-                surface: Surface::Hihat,
-                timestamp: 64,
-            },
-            Note {
-                value: NoteValue::Eighth,
-                surface: Surface::Hihat,
-                timestamp: 96,
-            },
-            Note {
-                value: NoteValue::Quarter,
-                surface: Surface::Kick,
-                timestamp: 128,
-            },
-            Note {
-                value: NoteValue::Quarter,
-                surface: Surface::Hihat,
-                timestamp: 128,
-            },
-            Note {
-                value: NoteValue::Eighth,
-                surface: Surface::Hihat,
-                timestamp: 160,
-            },
-            Note {
-                value: NoteValue::Quarter,
-                surface: Surface::Snare,
-                timestamp: 192,
-            },
-            Note {
-                value: NoteValue::Quarter,
-                surface: Surface::Hihat,
-                timestamp: 192,
-            },
-            Note {
-                value: NoteValue::Eighth,
-                surface: Surface::Hihat,
-                timestamp: 224,
-            },
-        ],
-        vec![
-            Note {
-                value: NoteValue::Quarter,
-                surface: Surface::Snare,
-                timestamp: 256,
-            },
-            Note {
-                value: NoteValue::Quarter,
-                surface: Surface::Snare,
-                timestamp: 320,
-            },
-            Note {
-                value: NoteValue::Quarter,
-                surface: Surface::Snare,
-                timestamp: 384,
-            },
-            Note {
-                value: NoteValue::Quarter,
-                surface: Surface::Snare,
-                timestamp: 448,
-            },
-        ],
-    ];
+            measures.set(updated_measures);
+        }
+    };
+
+    let line_height = height() as f32 / 8.;
     let num_measures = measures.len() as f32;
 
     rsx! {
@@ -127,6 +154,7 @@ pub fn Staff() -> Element {
             onresize: handle_on_resize,
             onmousemove: handle_on_mouse_move,
             onmouseleave: handle_on_mouse_leave,
+            onclick: handle_on_click,
             svg { class: "staff", width: "{width}px", height: "{height}px",
 
                 g {
@@ -167,10 +195,10 @@ pub fn Staff() -> Element {
                 }
 
                 {
-                    measures
+                    measures()
                         .into_iter()
                         .enumerate()
-                        .map(|(i, notes)| {
+                        .map(|(i, measure)| {
                             let left_bound = (i as f32) * width() as f32 / num_measures;
                             let right_bound = (i as f32 + 1.) * width() as f32 / num_measures;
                             let padded_left_bound = left_bound + 1.5 * line_height;
@@ -201,7 +229,14 @@ pub fn Staff() -> Element {
                                         y2: "{scale.get_y(3.5)}",
                                     }
                                 }
-                                Measure { scale, notes, mouse_position }
+                                Measure {
+                                    scale,
+                                    notes: measure.notes.clone(),
+                                    mouse_position,
+                                    on_preview_note_created: move |note| {
+                                        preview_note.set(Some(note));
+                                    },
+                                }
                             }
                         })
                 }

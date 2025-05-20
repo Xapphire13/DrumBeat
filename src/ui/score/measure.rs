@@ -15,21 +15,22 @@ pub fn Measure(
     scale: MeasureScale,
     notes: Vec<NoteData>,
     mouse_position: Option<Position>,
+    on_preview_note_created: EventHandler<NoteData>,
 ) -> Element {
     let app_mode = use_context::<Signal<AppMode>>();
-    let is_edit_mode;
-    let preview_note;
-
-    match (app_mode(), mouse_position) {
-        (AppMode::Edit { note_value }, Some(mouse_position)) => {
-            is_edit_mode = true;
-            preview_note = Some(scale.get_nearest_note(mouse_position, note_value));
-        }
-        _ => {
-            is_edit_mode = false;
-            preview_note = None;
-        }
+    let preview_note = if let (AppMode::Edit { note_value }, Some(mouse_position)) =
+        (app_mode(), mouse_position)
+    {
+        scale.get_nearest_note(mouse_position, note_value)
+    } else {
+        None
     };
+
+    use_effect(use_reactive(&preview_note, move |preview_note| {
+        if let Some(note) = preview_note {
+            on_preview_note_created(note);
+        }
+    }));
 
     rsx! {
         g {
@@ -49,13 +50,8 @@ pub fn Measure(
                     })
             }
 
-            if is_edit_mode {
-                if let Some(Some(preview_note)) = preview_note {
-                    PreviewNote {
-                        position: scale.get_position(&preview_note),
-                        scale,
-                    }
-                }
+            if let (AppMode::Edit { .. }, Some(preview_note)) = (app_mode(), preview_note) {
+                PreviewNote { position: scale.get_position(&preview_note), scale }
             }
         }
     }
