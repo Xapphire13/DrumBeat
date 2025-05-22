@@ -1,11 +1,8 @@
 use dioxus::prelude::*;
 
 use crate::{
-    data::{note::Note as NoteData, position::Position},
-    ui::{
-        app_mode::AppMode,
-        score::{note::Note, preview_note::PreviewNote},
-    },
+    data::{app_mode::AppMode, note::Note as NoteData, position::Position},
+    ui::score::{note::Note, preview_note::PreviewNote},
 };
 
 use super::measure_scale::MeasureScale;
@@ -15,7 +12,7 @@ pub fn Measure(
     scale: MeasureScale,
     notes: Vec<NoteData>,
     mouse_position: Option<Position>,
-    on_preview_note_created: EventHandler<Option<NoteData>>,
+    on_preview_note_created: Callback<Option<NoteData>>,
 ) -> Element {
     let app_mode = use_context::<Signal<AppMode>>();
     let preview_note = if let (AppMode::Edit { note_value }, Some(mouse_position)) =

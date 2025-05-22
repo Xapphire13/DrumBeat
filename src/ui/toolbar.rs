@@ -1,7 +1,7 @@
 mod edit_toolbar;
 mod view_toolbar;
 
-use crate::{data::note::NoteValue, ui::app_mode::AppMode};
+use crate::data::{app_mode::AppMode, note::NoteValue};
 use dioxus::prelude::*;
 use edit_toolbar::EditToolbar;
 use view_toolbar::ViewToolbar;

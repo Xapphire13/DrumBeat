@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
 
-use crate::{data::note::NoteValue, ui::app_mode::AppMode};
+use crate::data::{app_mode::AppMode, note::NoteValue};
 
 #[component]
 pub fn EditToolbar() -> Element {

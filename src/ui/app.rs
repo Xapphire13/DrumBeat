@@ -5,7 +5,10 @@ use std::rc::Rc;
 use dioxus::prelude::*;
 use midir::MidiInput;
 
-use crate::ui::{app_mode::AppMode, score::Score, toolbar::Toolbar};
+use crate::{
+    data::app_mode::AppMode,
+    ui::{score::Score, toolbar::Toolbar},
+};
 
 const FAVICON: Asset = asset!("/assets/favicon.ico");
 const MAIN_CSS: Asset = asset!("/assets/main.css");
