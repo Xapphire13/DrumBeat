@@ -120,6 +120,7 @@ pub fn Staff() -> Element {
 
     let handle_on_mouse_leave = move |_: MouseEvent| {
         mouse_position.set(None);
+        preview_note.set(None);
     };
 
     let handle_on_resize = move |ev: ResizeEvent| {
@@ -128,20 +129,21 @@ pub fn Staff() -> Element {
     };
 
     let handle_on_click = move |_: MouseEvent| {
-        if let Some(preview_note) = preview_note() {
+        if let Some(new_note) = preview_note() {
             let updated_measures = measures()
                 .into_iter()
                 .map(|mut measure| {
-                    if measure.timestamp <= preview_note.timestamp
-                        && preview_note.timestamp - measure.timestamp < 256
+                    if measure.timestamp <= new_note.timestamp
+                        && new_note.timestamp - measure.timestamp < 256
                     {
-                        measure.notes.push(preview_note.clone());
+                        measure.notes.push(new_note.clone());
                     }
                     measure
                 })
                 .collect();
 
             measures.set(updated_measures);
+            preview_note.set(None);
         }
     };
 
@@ -234,7 +236,7 @@ pub fn Staff() -> Element {
                                     notes: measure.notes.clone(),
                                     mouse_position,
                                     on_preview_note_created: move |note| {
-                                        preview_note.set(Some(note));
+                                        preview_note.set(note);
                                     },
                                 }
                             }

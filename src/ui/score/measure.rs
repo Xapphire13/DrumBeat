@@ -15,21 +15,29 @@ pub fn Measure(
     scale: MeasureScale,
     notes: Vec<NoteData>,
     mouse_position: Option<Position>,
-    on_preview_note_created: EventHandler<NoteData>,
+    on_preview_note_created: EventHandler<Option<NoteData>>,
 ) -> Element {
     let app_mode = use_context::<Signal<AppMode>>();
     let preview_note = if let (AppMode::Edit { note_value }, Some(mouse_position)) =
         (app_mode(), mouse_position)
     {
-        scale.get_nearest_note(mouse_position, note_value)
+        let nearest_note = scale.get_nearest_note(mouse_position, note_value);
+
+        if nearest_note.as_ref().is_some_and(|nearest_note| {
+            notes.iter().any(|note| {
+                note.surface == nearest_note.surface && note.timestamp == nearest_note.timestamp
+            })
+        }) {
+            None
+        } else {
+            nearest_note
+        }
     } else {
         None
     };
 
     use_effect(use_reactive(&preview_note, move |preview_note| {
-        if let Some(note) = preview_note {
-            on_preview_note_created(note);
-        }
+        on_preview_note_created(preview_note);
     }));
 
     rsx! {
