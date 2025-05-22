@@ -2,6 +2,7 @@ use dioxus::{html::geometry::euclid::Point2D, prelude::*};
 
 use crate::{
     data::{
+        app_mode::{AppMode, EditMode},
         measure::Measure as MeasureData,
         note::{Note, NoteValue, Surface},
         position::Position,
@@ -11,6 +12,7 @@ use crate::{
 
 #[component]
 pub fn Staff() -> Element {
+    let app_mode = use_context::<Signal<AppMode>>();
     let mut width = use_signal(|| 0i32);
     let mut height = use_signal(|| 0i32);
     let mut mouse_position = use_signal::<Option<Position>>(|| None);
@@ -128,22 +130,52 @@ pub fn Staff() -> Element {
         height.set(ev.get_border_box_size().unwrap().height as i32);
     };
 
-    let handle_on_click = move |_: MouseEvent| {
-        if let Some(new_note) = preview_note() {
-            let updated_measures = measures()
-                .into_iter()
-                .map(|mut measure| {
-                    if measure.timestamp <= new_note.timestamp
-                        && new_note.timestamp - measure.timestamp < 256
-                    {
-                        measure.notes.push(new_note.clone());
-                    }
+    let mut handle_remove_note = move |note: Note| {
+        let updated_measures = measures()
+            .into_iter()
+            .map(|mut measure| {
+                if measure.timestamp <= note.timestamp && note.timestamp - measure.timestamp < 256 {
                     measure
-                })
-                .collect();
+                        .notes
+                        .retain(|n| n.surface != note.surface || n.timestamp != note.timestamp);
+                }
 
-            measures.set(updated_measures);
-            preview_note.set(None);
+                measure
+            })
+            .collect();
+
+        measures.set(updated_measures);
+        preview_note.set(None);
+    };
+
+    let mut handle_add_note = move |note: Note| {
+        let updated_measures = measures()
+            .into_iter()
+            .map(|mut measure| {
+                if measure.timestamp <= note.timestamp && note.timestamp - measure.timestamp < 256 {
+                    measure.notes.push(note.clone());
+                }
+                measure
+            })
+            .collect();
+
+        measures.set(updated_measures);
+        preview_note.set(None);
+    };
+
+    let handle_on_click = move |_: MouseEvent| {
+        if let Some(note) = preview_note() {
+            match app_mode() {
+                AppMode::Edit {
+                    edit_mode: EditMode::Add,
+                    ..
+                } => handle_add_note(note),
+                AppMode::Edit {
+                    edit_mode: EditMode::Remove,
+                    ..
+                } => handle_remove_note(note),
+                _ => {}
+            }
         }
     };
 

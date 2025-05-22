@@ -3,9 +3,18 @@ use std::fmt::Display;
 use crate::data::note::NoteValue;
 
 #[derive(Clone)]
+pub enum EditMode {
+    Add,
+    Remove,
+}
+
+#[derive(Clone)]
 pub enum AppMode {
     View,
-    Edit { note_value: NoteValue },
+    Edit {
+        note_value: NoteValue,
+        edit_mode: EditMode,
+    },
 }
 
 impl Display for AppMode {

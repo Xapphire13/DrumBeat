@@ -7,12 +7,28 @@ use crate::data::{
 
 use super::measure_scale::MeasureScale;
 
+#[derive(Clone, PartialEq)]
+pub enum NoteColor {
+    Black,
+    Red,
+}
+
+impl NoteColor {
+    fn get_css_color(&self) -> &str {
+        match self {
+            NoteColor::Black => "black",
+            NoteColor::Red => "red",
+        }
+    }
+}
+
 #[component]
 pub fn Note(
     value: NoteValue,
     surface: Surface,
     position: Position,
     scale: MeasureScale,
+    color: Option<NoteColor>,
 ) -> Element {
     let Position { x, y } = position;
     // Size calculations for note shapes
@@ -21,6 +37,7 @@ pub fn Note(
     // Calculate beam line position
     let beam_line_number = scale.get_beam_line_number(value);
     let beam_y = scale.get_y(beam_line_number);
+    let fill_color = color.as_ref().unwrap_or(&NoteColor::Black).get_css_color();
 
     rsx! {
         g {
@@ -33,7 +50,7 @@ pub fn Note(
                             y1: y - size,
                             x2: x + size,
                             y2: y + size,
-                            stroke: "black",
+                            stroke: fill_color,
                             stroke_width: 1.5,
                         }
                         line {
@@ -41,7 +58,7 @@ pub fn Note(
                             y1: y + size,
                             x2: x + size,
                             y2: y - size,
-                            stroke: "black",
+                            stroke: fill_color,
                             stroke_width: 1.5,
                         }
                         // Stem line to beam for hihat (from top right corner)
@@ -50,7 +67,7 @@ pub fn Note(
                             y1: y - size,
                             x2: x + size,
                             y2: beam_y,
-                            stroke: "black",
+                            stroke: fill_color,
                             stroke_width: 1.5,
                         }
                     }
@@ -66,7 +83,8 @@ pub fn Note(
                             cx: x,
                             cy: y,
                             transform: format!("rotate(-30 {} {})", x, y),
-                            fill: "black",
+                            fill: fill_color,
+                            stroke: fill_color,
                         }
                         // Stem line to beam for other notes
                         line {
@@ -74,7 +92,7 @@ pub fn Note(
                             y1: y - 1.,
                             x2: x + size,
                             y2: beam_y,
-                            stroke: "black",
+                            stroke: fill_color,
                             stroke_width: 1.5,
                         }
                     }

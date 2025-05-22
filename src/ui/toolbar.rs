@@ -1,7 +1,10 @@
 mod edit_toolbar;
 mod view_toolbar;
 
-use crate::data::{app_mode::AppMode, note::NoteValue};
+use crate::data::{
+    app_mode::{AppMode, EditMode},
+    note::NoteValue,
+};
 use dioxus::prelude::*;
 use edit_toolbar::EditToolbar;
 use view_toolbar::ViewToolbar;
@@ -21,6 +24,7 @@ pub fn Toolbar() -> Element {
                                 AppMode::View => {
                                     AppMode::Edit {
                                         note_value: NoteValue::Eighth,
+                                        edit_mode: EditMode::Add,
                                     }
                                 }
                                 AppMode::Edit { .. } => AppMode::View,
