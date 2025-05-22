@@ -192,39 +192,13 @@ pub fn Staff() -> Element {
             svg { class: "staff", width: "{width}px", height: "{height}px",
 
                 g {
-                    line {
-                        x1: "0",
-                        y1: "{(2. * line_height) + line_height}",
-                        x2: "{width}",
-                        y2: "{(2. * line_height) + line_height}",
-                    }
-
-                    line {
-                        x1: "0",
-                        y1: "{(2. * line_height) + 2.*line_height}",
-                        x2: "{width}",
-                        y2: "{(2. * line_height) + 2.*line_height}",
-                    }
-
-                    line {
-                        x1: "0",
-                        y1: "{(2. * line_height) + 3.*line_height}",
-                        x2: "{width}",
-                        y2: "{(2. * line_height) + 3.*line_height}",
-                    }
-
-                    line {
-                        x1: "0",
-                        y1: "{(2. * line_height) + 4.*line_height}",
-                        x2: "{width}",
-                        y2: "{(2. * line_height) + 4.*line_height}",
-                    }
-
-                    line {
-                        x1: "0",
-                        y1: "{(2. * line_height) + 5.*line_height}",
-                        x2: "{width}",
-                        y2: "{(2. * line_height) + 5.*line_height}",
+                    for line_number in 1..=5 {
+                        line {
+                            x1: "0",
+                            y1: "{(2. * line_height) + (line_number as f32)*line_height}",
+                            x2: "{width}",
+                            y2: "{(2. * line_height) + (line_number as f32)*line_height}",
+                        }
                     }
                 }
 

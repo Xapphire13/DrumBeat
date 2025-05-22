@@ -85,7 +85,7 @@ pub fn Measure(
             if let (AppMode::Edit { edit_mode: EditMode::Add, .. }, Some(preview_note), false) = (
                 app_mode(),
                 preview_note,
-                preview_note_is_existing_note
+                preview_note_is_existing_note,
             )
             {
                 PreviewNote { position: scale.get_position(&preview_note), scale }
