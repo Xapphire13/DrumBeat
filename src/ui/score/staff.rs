@@ -7,14 +7,16 @@ use crate::{
         note::{Note, NoteValue, Surface},
         position::Position,
     },
-    ui::score::{measure::Measure, measure_scale::MeasureScale},
+    ui::{
+        hooks::use_size,
+        score::{measure::Measure, measure_scale::MeasureScale},
+    },
 };
 
 #[component]
 pub fn Staff() -> Element {
     let app_mode = use_context::<Signal<AppMode>>();
-    let mut width = use_signal(|| 0i32);
-    let mut height = use_signal(|| 0i32);
+    let (width, height, handle_on_resize) = use_size();
     let mut mouse_position = use_signal::<Option<Position>>(|| None);
     let mut preview_note: Signal<Option<Note>> = use_signal(|| None);
     let mut measures = use_signal(|| {
@@ -125,11 +127,6 @@ pub fn Staff() -> Element {
         preview_note.set(None);
     };
 
-    let handle_on_resize = move |ev: ResizeEvent| {
-        width.set(ev.get_border_box_size().unwrap().width as i32);
-        height.set(ev.get_border_box_size().unwrap().height as i32);
-    };
-
     let mut handle_remove_note = move |note: Note| {
         let updated_measures = measures()
             .into_iter()
@@ -179,7 +176,7 @@ pub fn Staff() -> Element {
         }
     };
 
-    let line_height = height() as f32 / 8.;
+    let line_height = height as f32 / 8.;
     let num_measures = measures.len() as f32;
 
     rsx! {
@@ -207,13 +204,13 @@ pub fn Staff() -> Element {
                         .into_iter()
                         .enumerate()
                         .map(|(i, measure)| {
-                            let left_bound = (i as f32) * width() as f32 / num_measures;
-                            let right_bound = (i as f32 + 1.) * width() as f32 / num_measures;
+                            let left_bound = (i as f32) * width as f32 / num_measures;
+                            let right_bound = (i as f32 + 1.) * width as f32 / num_measures;
                             let padded_left_bound = left_bound + 1.5 * line_height;
                             let padded_right_bound = right_bound - 0.5 * line_height;
                             let scale = MeasureScale::new(
                                 (padded_left_bound, padded_right_bound),
-                                height() as f32 - 1.5 * line_height,
+                                height as f32 - 1.5 * line_height,
                                 line_height,
                                 i as u32 * 256,
                             );
@@ -229,6 +226,7 @@ pub fn Staff() -> Element {
                                 None
                             };
                             rsx! {
+                                // Draw vertical line between measures
                                 if i > 0 {
                                     line {
                                         x1: "{left_bound}",
