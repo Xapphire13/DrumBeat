@@ -119,7 +119,7 @@ pub fn Staff(
                                 }
                                 Measure {
                                     scale,
-                                    notes: measure.notes.clone(),
+                                    notes: measure.notes,
                                     mouse_position,
                                     on_preview_note_created: move |note| {
                                         preview_note.set(note);
