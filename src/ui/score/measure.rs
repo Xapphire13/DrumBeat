@@ -31,6 +31,14 @@ pub fn Measure(
     let app_mode = use_context::<Signal<AppMode>>();
     let preview_note = calculate_preview_note(&app_mode(), &scale, mouse_position);
     let preview_note_overlaps_with_existing_note = is_existing_note(&preview_note, &notes);
+    // Sort note to be removed after the rest
+    notes.sort_by(|left, right| {
+        is_note_to_be_removed(&app_mode(), &preview_note, left).cmp(&is_note_to_be_removed(
+            &app_mode(),
+            &preview_note,
+            right,
+        ))
+    });
 
     // Notify parent component when preview note changes
     use_effect(use_reactive(&preview_note, move |preview_note| {
