@@ -6,6 +6,7 @@ use crate::data::{
 #[derive(Clone, PartialEq)]
 pub struct MeasureScale {
     pub line_height: f32,
+    pub outer_x_bounds: (f32, f32),
 
     x_range: (f32, f32),
     y_baseline: f32,
@@ -14,17 +15,23 @@ pub struct MeasureScale {
 
 impl MeasureScale {
     pub fn new(
+        outer_x_bounds: (f32, f32),
         x_range: (f32, f32),
         y_baseline: f32,
         line_height: f32,
         start_timestamp: u32,
     ) -> MeasureScale {
         MeasureScale {
+            outer_x_bounds,
             x_range,
             y_baseline,
             line_height,
             start_timestamp,
         }
+    }
+
+    pub fn is_within_bounds(&self, Position { x, .. }: &Position) -> bool {
+        *x >= self.outer_x_bounds.0 && *x <= self.outer_x_bounds.1
     }
 
     pub fn get_y(&self, line_number: f32) -> f32 {
@@ -80,6 +87,7 @@ impl MeasureScale {
 
     pub fn get_nearest_note(&self, position: Position, note_value: NoteValue) -> Option<Note> {
         let Position { x, y } = position;
+        let x = x - self.x_range.0; // We want the x-position to be in terms of offset from the first note position
 
         // Convert y-position to line number:
         // 1. Calculate distance from baseline (self.y_baseline - y)

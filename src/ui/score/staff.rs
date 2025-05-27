@@ -21,6 +21,26 @@ pub fn Staff(
     let app_mode = use_context::<Signal<AppMode>>();
     let mut mouse_position = use_signal::<Option<Position>>(|| None);
     let mut preview_note: Signal<Option<Note>> = use_signal(|| None);
+    let line_height = height / 8.;
+    let num_measures = measures.len() as f32;
+    let scales = use_memo(use_reactive(&measures.len(), move |number_of_measures| {
+        (0..number_of_measures)
+            .map(|i| {
+                let left_bound = (i as f32) * width / num_measures;
+                let right_bound = (i as f32 + 1.) * width / num_measures;
+                let padded_left_bound = left_bound + 1.5 * line_height;
+                let padded_right_bound = right_bound - 0.5 * line_height;
+
+                MeasureScale::new(
+                    (left_bound, right_bound),
+                    (padded_left_bound, padded_right_bound),
+                    height - 1.5 * line_height,
+                    line_height,
+                    i as u32 * 256,
+                )
+            })
+            .collect::<Vec<MeasureScale>>()
+    }));
 
     let handle_on_mouse_move = move |ev: MouseEvent| {
         let Point2D { x, y, .. } = ev.coordinates().element();
@@ -57,9 +77,6 @@ pub fn Staff(
         }
     };
 
-    let line_height = height / 8.;
-    let num_measures = measures.len() as f32;
-
     rsx! {
         div {
             class: "staff-container",
@@ -85,47 +102,30 @@ pub fn Staff(
                     measures
                         .into_iter()
                         .enumerate()
-                        .map(|(i, measure)| {
-                            let left_bound = (i as f32) * width / num_measures;
-                            let right_bound = (i as f32 + 1.) * width / num_measures;
-                            let padded_left_bound = left_bound + 1.5 * line_height;
-                            let padded_right_bound = right_bound - 0.5 * line_height;
-                            let scale = MeasureScale::new(
-                                (padded_left_bound, padded_right_bound),
-                                height - 1.5 * line_height,
-                                line_height,
-                                i as u32 * 256,
-                            );
-                            let mouse_position = 'mouse_position: {
-                                if let Some(Position { x, y }) = mouse_position() {
-                                    if x >= left_bound && x < right_bound {
-                                        break 'mouse_position Some(Position {
-                                            x: x - padded_left_bound,
-                                            y,
-                                        });
-                                    }
-                                }
-                                None
-                            };
-                            rsx! {
+                        .filter_map(|(i, measure)| {
+                            let scale = scales.get(i)?;
+                            let mouse_position = mouse_position().take_if(|position| scale.is_within_bounds(position));
+                            let outer_left_bound = scale.outer_x_bounds.0;
+
+                            Some(rsx! {
                                 // Draw vertical line between measures
                                 if i > 0 {
                                     line {
-                                        x1: "{left_bound}",
+                                        x1: "{outer_left_bound}",
                                         y1: "{scale.get_y(-0.5)}",
-                                        x2: "{left_bound}",
+                                        x2: "{outer_left_bound}",
                                         y2: "{scale.get_y(3.5)}",
                                     }
                                 }
                                 Measure {
-                                    scale,
+                                    scale: scale.clone(),
                                     notes: measure.notes,
                                     mouse_position,
                                     on_preview_note_created: move |note| {
                                         preview_note.set(note);
                                     },
                                 }
-                            }
+                            })
                         })
                 }
             }
