@@ -17,6 +17,8 @@ pub fn Staff(
     measures: Vec<MeasureData>,
     handle_remove_note: Callback<Note>,
     handle_add_note: Callback<Note>,
+    /// Playhead timestamp, if within this staff
+    playhead_timestamp: Option<u32>,
 ) -> Element {
     let app_mode = use_context::<Signal<AppMode>>();
     let mut mouse_position = use_signal::<Option<Position>>(|| None);
@@ -86,7 +88,7 @@ pub fn Staff(
             style: "height: {height}px",
 
             svg { class: "staff", width: "{width}px", height: "{height}px",
-
+                // Staff lines
                 g {
                     for line_number in 1..=5 {
                         line {
@@ -98,15 +100,49 @@ pub fn Staff(
                     }
                 }
 
+                // Playhead
+                if let Some(x) = playhead_timestamp
+                    .and_then(|playhead_timestamp| {
+                        let scales = scales();
+                        let measure_scale = scales
+                            .iter()
+                            .enumerate()
+                            .rev()
+                            .find_map(|(i, scale)| {
+                                measures
+                                    .get(i)
+                                    .and_then(|measure| {
+                                        if measure.timestamp <= playhead_timestamp {
+                                            Some(scale)
+                                        } else {
+                                            None
+                                        }
+                                    })
+                            });
+                        measure_scale.map(|measure_scale| measure_scale.get_x(playhead_timestamp))
+                    })
+                {
+                    line {
+                        stroke: "#8F00FF",
+                        stroke_width: 1.5,
+
+                        x1: "{x}",
+                        y1: "0",
+                        x2: "{x}",
+                        y2: "{height}",
+                    }
+                }
+
+                // Measures
                 {
                     measures
                         .into_iter()
                         .enumerate()
                         .filter_map(|(i, measure)| {
                             let scale = scales.get(i)?;
-                            let mouse_position = mouse_position().take_if(|position| scale.is_within_bounds(position));
+                            let mouse_position = mouse_position()
+                                .take_if(|position| scale.is_within_bounds(position));
                             let outer_left_bound = scale.outer_x_bounds.0;
-
                             Some(rsx! {
                                 // Draw vertical line between measures
                                 if i > 0 {

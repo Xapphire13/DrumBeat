@@ -39,6 +39,13 @@ impl MeasureScale {
         self.y_baseline - self.line_height * line_number
     }
 
+    pub fn get_x(&self, timestamp: u32) -> f32 {
+        // TODO, update this when we support time-signatures other than 4/4
+        let step_size = (self.x_range.1 - self.x_range.0) / 256.0;
+
+        self.x_range.0 + (timestamp - self.start_timestamp) as f32 * step_size
+    }
+
     pub fn get_position(&self, note: &Note) -> Position {
         let (x_min, x_max) = self.x_range;
         let width = x_max - x_min;

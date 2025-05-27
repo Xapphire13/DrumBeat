@@ -5,6 +5,7 @@ use crate::{
     data::{
         measure::Measure,
         note::{Note, NoteValue, Surface},
+        score::Score as ScoreData,
     },
     ui::hooks::use_size,
 };
@@ -19,38 +20,51 @@ mod staff;
 pub fn Score() -> Element {
     let (width, _, handle_on_resize) = use_size();
     let mut score = use_score();
-    let measures_per_staff = ((width / 350.0).floor() as usize).max(1);
+    let measures_per_staff = ((width / 350.0).floor() as u32).max(1);
+    let playhead_timestamp = use_signal(|| 0u32);
+    let playhead_staff_number = playhead_timestamp / (measures_per_staff * 256);
     let chunked_measures: Vec<Vec<Measure>> = score()
-        .chunks(measures_per_staff)
+        .measures
+        .chunks(measures_per_staff as usize)
         .map(|chunk| chunk.to_vec())
         .collect();
 
     let handle_remove_note = move |note: Note| {
-        let updated_score = score()
-            .into_iter()
-            .map(|mut measure| {
-                if measure.timestamp <= note.timestamp && note.timestamp - measure.timestamp < 256 {
-                    measure.remove_note(note.clone());
-                }
+        let updated_score = ScoreData {
+            measures: score()
+                .measures
+                .into_iter()
+                .map(|mut measure| {
+                    if measure.timestamp <= note.timestamp
+                        && note.timestamp - measure.timestamp < 256
+                    {
+                        measure.remove_note(note.clone());
+                    }
 
-                measure
-            })
-            .collect();
+                    measure
+                })
+                .collect(),
+        };
 
         score.set(updated_score);
     };
 
     let handle_add_note = move |note: Note| {
-        let updated_score = score()
-            .into_iter()
-            .map(|mut measure| {
-                if measure.timestamp <= note.timestamp && note.timestamp - measure.timestamp < 256 {
-                    measure.add_note(note.clone());
-                }
+        let updated_score = ScoreData {
+            measures: score()
+                .measures
+                .into_iter()
+                .map(|mut measure| {
+                    if measure.timestamp <= note.timestamp
+                        && note.timestamp - measure.timestamp < 256
+                    {
+                        measure.add_note(note.clone());
+                    }
 
-                measure
-            })
-            .collect();
+                    measure
+                })
+                .collect(),
+        };
 
         score.set(updated_score);
     };
@@ -58,22 +72,28 @@ pub fn Score() -> Element {
     rsx! {
         div { class: "score", onresize: handle_on_resize,
 
-            {chunked_measures.into_iter().map(|measures| rsx! {
-                Staff {
-                    width: width as f32,
-                    height: 120.0,
-                    measures,
-                    handle_add_note,
-                    handle_remove_note,
-                }
-            })}
+            {
+                chunked_measures
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, measures)| rsx! {
+                        Staff {
+                            width: width as f32,
+                            height: 120.0,
+                            measures,
+                            handle_add_note,
+                            handle_remove_note,
+                            playhead_timestamp: if playhead_staff_number == i as u32 { Some(playhead_timestamp()) } else { None },
+                        }
+                    })
+            }
         }
     }
 }
 
-fn use_score() -> Signal<Vec<Measure>> {
-    use_signal(|| {
-        vec![
+fn use_score() -> Signal<ScoreData> {
+    use_signal(|| ScoreData {
+        measures: vec![
             Measure {
                 notes: vec![
                     Note {
@@ -138,9 +158,11 @@ fn use_score() -> Signal<Vec<Measure>> {
                     },
                 ],
                 timestamp: 0,
+                length: 256,
             },
             Measure {
                 timestamp: 256,
+                length: 256,
                 notes: vec![
                     Note {
                         value: NoteValue::Quarter,
@@ -164,6 +186,6 @@ fn use_score() -> Signal<Vec<Measure>> {
                     },
                 ],
             },
-        ]
+        ],
     })
 }
