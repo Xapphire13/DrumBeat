@@ -7,7 +7,7 @@ use midir::MidiInput;
 
 use crate::{
     data::app_mode::AppMode,
-    ui::{score::Score, toolbar::Toolbar},
+    ui::{playback_bar::PlaybackBar, score::Score, toolbar::Toolbar},
 };
 
 const FAVICON: Asset = asset!("/assets/favicon.ico");
@@ -50,6 +50,9 @@ pub fn App() -> Element {
 
         div { "MIDI: {midi_output}" }
 
-        Score {}
+        div { class: "score-container",
+            Score {}
+            PlaybackBar {}
+        }
     }
 }

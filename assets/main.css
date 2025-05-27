@@ -12,8 +12,12 @@ body {
     flex-direction: column;
 }
 
-.score {
+.score-container {
+    position: relative;
     flex-grow: 1;
+}
+
+.score {
     display: flex;
     flex-direction: column;
 }
@@ -34,4 +38,17 @@ body {
     left: 0;
     top: 0;
     stroke: black;
+}
+
+.playback-bar-container {
+    position: absolute;
+    bottom: 32px;
+    left: 0;
+    right: 0;
+    display: flex;
+    justify-content: center;
+}
+
+.playback-bar {
+    background: gray;
 }
