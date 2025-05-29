@@ -7,7 +7,11 @@ use midir::MidiInput;
 
 use crate::{
     data::app_mode::AppMode,
-    ui::{playback_bar::PlaybackBar, score::Score, toolbar::Toolbar},
+    ui::{
+        hooks::{use_playback_state_provider, use_score_provider},
+        score::Score,
+        toolbar::Toolbar,
+    },
 };
 
 const FAVICON: Asset = asset!("/assets/favicon.ico");
@@ -16,6 +20,8 @@ const MAIN_CSS: Asset = asset!("/assets/main.css");
 #[component]
 pub fn App() -> Element {
     use_context_provider(|| Signal::new(AppMode::View));
+    use_playback_state_provider();
+    use_score_provider();
 
     let mut midi_output = use_signal_sync(String::new);
     let _midi_connection = use_hook(|| {
@@ -43,6 +49,7 @@ pub fn App() -> Element {
     });
 
     rsx! {
+        {dioxus_feather_icons::sprite!()}
         document::Link { rel: "icon", href: FAVICON }
         document::Link { rel: "stylesheet", href: MAIN_CSS }
 
@@ -50,9 +57,6 @@ pub fn App() -> Element {
 
         div { "MIDI: {midi_output}" }
 
-        div { class: "score-container",
-            Score {}
-            PlaybackBar {}
-        }
+        Score {}
     }
 }
