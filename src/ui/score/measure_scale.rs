@@ -56,7 +56,8 @@ impl MeasureScale {
         let (x_min, x_max) = self.x_range;
         let width = x_max - x_min;
 
-        let x_pos = x_min + (note.timestamp - self.start_timestamp) as f32 * width / self.measure_length as f32;
+        let x_pos = x_min
+            + (note.timestamp - self.start_timestamp) as f32 * width / self.measure_length as f32;
 
         let y_pos = self.get_y(self.get_surface_line_number(&note.surface));
 

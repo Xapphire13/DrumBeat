@@ -7,7 +7,10 @@ use crate::{
         note::Note,
         position::Position,
     },
-    ui::score::{measure::Measure, measure_scale::MeasureScale},
+    ui::{
+        hooks::{PlaybackState, use_playback_state},
+        score::{measure::Measure, measure_scale::MeasureScale},
+    },
 };
 
 #[component]
@@ -20,6 +23,7 @@ pub fn Staff(
     /// Playhead timestamp, if within this staff
     playhead_timestamp: Option<u32>,
 ) -> Element {
+    let mut playback_state = use_playback_state();
     let app_mode = use_context::<Signal<AppMode>>();
     let mut mouse_position = use_signal::<Option<Position>>(|| None);
     let mut preview_note: Signal<Option<Note>> = use_signal(|| None);
@@ -44,12 +48,71 @@ pub fn Staff(
                     cumulative_timestamp,
                     measure.time_signature.clone(),
                 );
-                
+
                 cumulative_timestamp += measure.get_length();
                 scale
             })
             .collect::<Vec<MeasureScale>>()
     }));
+
+    // Calculate phantom playhead position for View mode
+    let phantom_playhead = use_memo(use_reactive(
+        (&app_mode, &mouse_position, &scales, &measures),
+        move |(app_mode, mouse_position, scales, measures)| {
+            if matches!(app_mode(), AppMode::View) {
+                if let Some(Position { x, .. }) = mouse_position() {
+                    let scales = scales();
+
+                    // Collect all note timestamps from this staff
+                    let mut note_timestamps = vec![];
+                    for measure in measures.iter() {
+                        for note in &measure.notes {
+                            note_timestamps.push(note.timestamp);
+                        }
+                    }
+
+                    if note_timestamps.is_empty() {
+                        return None;
+                    }
+
+                    // Convert mouse x position to estimated timestamp
+                    let mut mouse_timestamp = 0u32;
+                    for (i, scale) in scales.iter().enumerate() {
+                        if x >= scale.outer_x_bounds.0 && x <= scale.outer_x_bounds.1 {
+                            if let Some(measure) = measures.get(i) {
+                                let relative_x = (x - scale.outer_x_bounds.0)
+                                    / (scale.outer_x_bounds.1 - scale.outer_x_bounds.0);
+                                mouse_timestamp = measure.timestamp
+                                    + (relative_x * measure.get_length() as f32) as u32;
+                                break;
+                            }
+                        }
+                    }
+
+                    // Find closest actual note timestamp
+                    if let Some(&closest_timestamp) = note_timestamps
+                        .iter()
+                        .min_by_key(|&&ts| (ts as i64 - mouse_timestamp as i64).abs())
+                    {
+                        // Find which scale contains this timestamp and get x position
+                        for (i, scale) in scales.iter().enumerate() {
+                            if let Some(measure) = measures.get(i) {
+                                if closest_timestamp >= measure.timestamp
+                                    && closest_timestamp < measure.timestamp + measure.get_length()
+                                {
+                                    return Some((
+                                        closest_timestamp,
+                                        scale.get_x(closest_timestamp),
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            None
+        },
+    ));
 
     let handle_on_mouse_move = move |ev: MouseEvent| {
         let Point2D { x, y, .. } = ev.coordinates().element();
@@ -82,6 +145,17 @@ pub fn Staff(
                     preview_note.set(None);
                 }
                 _ => {}
+            }
+        } else {
+            match app_mode() {
+                AppMode::View => {
+                    if let Some((phantom_playhead_timestamp, ..)) = phantom_playhead() {
+                        playback_state.set(PlaybackState {
+                            playhead_timestamp: phantom_playhead_timestamp,
+                        });
+                    }
+                }
+                AppMode::Edit { .. } => {}
             }
         }
     };
@@ -132,6 +206,20 @@ pub fn Staff(
                     line {
                         stroke: "#8F00FF",
                         stroke_width: 1.5,
+
+                        x1: "{x}",
+                        y1: "0",
+                        x2: "{x}",
+                        y2: "{height}",
+                    }
+                }
+
+                // Phantom playhead (only in View mode)
+                if let Some((_,x)) = phantom_playhead() {
+                    line {
+                        stroke: "#8F00FF",
+                        stroke_width: 1.5,
+                        stroke_opacity: 0.25,
 
                         x1: "{x}",
                         y1: "0",
