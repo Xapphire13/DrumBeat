@@ -8,7 +8,7 @@ use crate::{
         position::Position,
     },
     ui::{
-        hooks::{PlaybackState, use_playback_state},
+        hooks::{PlaybackState, use_haptic, use_playback_state},
         score::{measure::Measure, measure_scale::MeasureScale},
     },
 };
@@ -24,6 +24,7 @@ pub fn Staff(
     playhead_timestamp: Option<u32>,
 ) -> Element {
     let mut playback_state = use_playback_state();
+    let feedback_manager = use_haptic();
     let app_mode = use_context::<Signal<AppMode>>();
     let mut mouse_position = use_signal::<Option<Position>>(|| None);
     let mut preview_note: Signal<Option<Note>> = use_signal(|| None);
@@ -113,6 +114,12 @@ pub fn Staff(
             None
         },
     ));
+
+    use_effect(move || {
+        if phantom_playhead().is_some() {
+            feedback_manager.trigger();
+        }
+    });
 
     let handle_on_mouse_move = move |ev: MouseEvent| {
         let Point2D { x, y, .. } = ev.coordinates().element();

@@ -11,6 +11,7 @@ dioxus = { version = "0.6.3", features = [] }
 dioxus-desktop = "0.6.3"
 dioxus-feather-icons = "0.2.3"
 midir = "0.10.1"
+trackpad_haptic = "0.1.1"
 
 [features]
 default = ["desktop"]
