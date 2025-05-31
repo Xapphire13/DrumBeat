@@ -1,6 +1,7 @@
 use crate::data::{
     note::{Note, NoteValue, Surface},
     position::Position,
+    time_signature::TimeSignature,
 };
 
 #[derive(Clone, PartialEq)]
@@ -11,6 +12,7 @@ pub struct MeasureScale {
     x_range: (f32, f32),
     y_baseline: f32,
     start_timestamp: u32,
+    measure_length: u32,
 }
 
 impl MeasureScale {
@@ -20,13 +22,18 @@ impl MeasureScale {
         y_baseline: f32,
         line_height: f32,
         start_timestamp: u32,
+        time_signature: TimeSignature,
     ) -> MeasureScale {
+        let ticks_per_note = time_signature.note_value.get_ticks();
+        let measure_length = ticks_per_note * time_signature.notes_per_measure;
+
         MeasureScale {
             outer_x_bounds,
             x_range,
             y_baseline,
             line_height,
             start_timestamp,
+            measure_length: measure_length,
         }
     }
 
@@ -40,8 +47,7 @@ impl MeasureScale {
     }
 
     pub fn get_x(&self, timestamp: u32) -> f32 {
-        // TODO, update this when we support time-signatures other than 4/4
-        let step_size = (self.x_range.1 - self.x_range.0) / 256.0;
+        let step_size = (self.x_range.1 - self.x_range.0) / self.measure_length as f32;
 
         self.x_range.0 + (timestamp - self.start_timestamp) as f32 * step_size
     }
@@ -50,7 +56,7 @@ impl MeasureScale {
         let (x_min, x_max) = self.x_range;
         let width = x_max - x_min;
 
-        let x_pos = x_min + (note.timestamp - self.start_timestamp) as f32 * width / 256.0;
+        let x_pos = x_min + (note.timestamp - self.start_timestamp) as f32 * width / self.measure_length as f32;
 
         let y_pos = self.get_y(self.get_surface_line_number(&note.surface));
 
@@ -105,37 +111,18 @@ impl MeasureScale {
 
         if let Some(surface) = self.get_surface_from_line_number(line_number) {
             let width = self.x_range.1 - self.x_range.0;
-            let timestamp = self.start_timestamp
-                + match note_value {
-                    NoteValue::Quarter => {
-                        // Divide measure into 4 quarters (each worth 64 256th notes)
-                        let quarter_width = width / 4.0;
-                        // Determine which quarter we're in:
-                        // 1. Divide by quarter width to get quarter note index (0-3)
-                        // 2. Round to nearest whole quarter note
-                        // 3. Multiply by 64 to convert to 256th notes
-                        (x / quarter_width).round() as u32 * 64
-                    }
-                    NoteValue::Eighth => {
-                        // Divide measure into 8 eighths (each worth 32 256th notes)
-                        let eighth_width = width / 8.0;
-                        (x / eighth_width).round() as u32 * 32
-                    }
-                    NoteValue::Sixteenth => {
-                        // Divide measure into 16 sixteenths (each worth 16 256th notes)
-                        let sixteenth_width = width / 16.0;
-                        (x / sixteenth_width).round() as u32 * 16
-                    }
-                    NoteValue::ThirtySecond => {
-                        // Divide measure into 32 thirty-seconds (each worth 8 256th notes)
-                        let thirtysecondth_width = width / 32.0;
-                        (x / thirtysecondth_width).round() as u32 * 8
-                    }
-                };
+            let tick_size = width / self.measure_length as f32;
+            let timestamp = self.start_timestamp + {
+                let note_width = note_value.get_ticks() as f32 * tick_size;
+                // Determine which note we're in:
+                // 1. Divide by note width to get note note index
+                // 2. Round to nearest whole note
+                // 3. Multiply by number of ticks in note to convert to 256th notes
+                (x / note_width).round() as u32 * note_value.get_ticks()
+            };
 
             // Only return notes within the measure
-            // TODO, update this when we support time-signatures other than 4/4
-            if timestamp - self.start_timestamp < 256 {
+            if timestamp - self.start_timestamp < self.measure_length {
                 return Some(Note {
                     value: note_value,
                     surface,

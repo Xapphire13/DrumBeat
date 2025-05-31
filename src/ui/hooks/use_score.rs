@@ -4,6 +4,7 @@ use crate::data::{
     measure::Measure,
     note::{Note, NoteValue, Surface},
     score::Score,
+    time_signature::TimeSignature,
 };
 
 pub fn use_score_provider() -> Signal<Score> {
@@ -11,6 +12,11 @@ pub fn use_score_provider() -> Signal<Score> {
         Signal::new(Score {
             measures: vec![
                 Measure {
+                    timestamp: 0,
+                    time_signature: TimeSignature {
+                        notes_per_measure: 4,
+                        note_value: NoteValue::Quarter,
+                    },
                     notes: vec![
                         Note {
                             value: NoteValue::Quarter,
@@ -73,12 +79,13 @@ pub fn use_score_provider() -> Signal<Score> {
                             timestamp: 224,
                         },
                     ],
-                    timestamp: 0,
-                    length: 256,
                 },
                 Measure {
                     timestamp: 256,
-                    length: 256,
+                    time_signature: TimeSignature {
+                        notes_per_measure: 4,
+                        note_value: NoteValue::Quarter,
+                    },
                     notes: vec![
                         Note {
                             value: NoteValue::Quarter,

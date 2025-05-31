@@ -25,21 +25,28 @@ pub fn Staff(
     let mut preview_note: Signal<Option<Note>> = use_signal(|| None);
     let line_height = height / 8.;
     let num_measures = measures.len() as f32;
-    let scales = use_memo(use_reactive(&measures.len(), move |number_of_measures| {
-        (0..number_of_measures)
-            .map(|i| {
+    let scales = use_memo(use_reactive(&measures, move |measures| {
+        let mut cumulative_timestamp = 0;
+        measures
+            .iter()
+            .enumerate()
+            .map(|(i, measure)| {
                 let left_bound = (i as f32) * width / num_measures;
                 let right_bound = (i as f32 + 1.) * width / num_measures;
                 let padded_left_bound = left_bound + 1.5 * line_height;
                 let padded_right_bound = right_bound - 0.5 * line_height;
 
-                MeasureScale::new(
+                let scale = MeasureScale::new(
                     (left_bound, right_bound),
                     (padded_left_bound, padded_right_bound),
                     height - 1.5 * line_height,
                     line_height,
-                    i as u32 * 256,
-                )
+                    cumulative_timestamp,
+                    measure.time_signature.clone(),
+                );
+                
+                cumulative_timestamp += measure.get_length();
+                scale
             })
             .collect::<Vec<MeasureScale>>()
     }));

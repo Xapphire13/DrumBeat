@@ -3,22 +3,24 @@ use dioxus_feather_icons::prelude::*;
 
 use crate::ui::hooks::{PlaybackState, use_playback_state, use_score};
 
-// TODO support time signatures other than 4/4
-const TICKS_PER_MEASURE: u32 = 256;
-
 #[component]
 pub fn PlaybackBar() -> Element {
     let mut playback_state_ctx = use_playback_state();
     let playback_state = playback_state_ctx();
-    let score_ctx = use_score();
-    let score = score_ctx();
-    let measure_number = playback_state.playhead_timestamp / TICKS_PER_MEASURE;
-    let number_of_measures = score.measures.len() as u32;
+    let score = use_score();
+    let measure_index = score()
+        .measures
+        .iter()
+        .enumerate()
+        .find(|(_, measure)| measure.timestamp > playback_state.playhead_timestamp)
+        .map(|(i, ..)| i.saturating_sub(1))
+        .unwrap_or_else(|| score().measures.len().saturating_sub(1));
+    let number_of_measures = score().measures.len() as u32;
 
-    let note_timestamps = use_memo(use_reactive(&score, |score| {
+    let note_timestamps = use_memo(move || {
         let mut timestamps = vec![];
 
-        for measure in &score.measures {
+        for measure in score().measures {
             for note in &measure.notes {
                 if let Some(&last_timestamp) = timestamps.last() {
                     if last_timestamp < note.timestamp {
@@ -31,10 +33,15 @@ pub fn PlaybackBar() -> Element {
         }
 
         timestamps
-    }));
+    });
 
     let handle_skip_back = move |_: MouseEvent| {
-        let new_timestamp = TICKS_PER_MEASURE * measure_number.saturating_sub(1);
+        let new_measure_index = measure_index.saturating_sub(1);
+        let new_timestamp = score()
+            .measures
+            .get(new_measure_index)
+            .map(|measure| measure.timestamp)
+            .unwrap_or(0);
 
         playback_state_ctx.set(PlaybackState {
             playhead_timestamp: new_timestamp,
@@ -42,12 +49,17 @@ pub fn PlaybackBar() -> Element {
     };
 
     let handle_skip_forward = move |_: MouseEvent| {
-        let new_timestamp =
-            TICKS_PER_MEASURE * measure_number.saturating_add(1).min(number_of_measures - 1);
+        let new_measure_index = measure_index.saturating_add(1);
 
-        playback_state_ctx.set(PlaybackState {
-            playhead_timestamp: new_timestamp,
-        });
+        if let Some(new_timestamp) = score()
+            .measures
+            .get(new_measure_index)
+            .map(|measure| measure.timestamp)
+        {
+            playback_state_ctx.set(PlaybackState {
+                playhead_timestamp: new_timestamp,
+            });
+        }
     };
 
     let handle_prev_note = move |_: MouseEvent| {
@@ -86,7 +98,7 @@ pub fn PlaybackBar() -> Element {
                 input {
                     class: "measure-number",
                     r#type: "text",
-                    value: measure_number + 1,
+                    value: measure_index + 1,
                 }
                 "/ {number_of_measures}"
                 button { onclick: handle_skip_back, {icon!(skip_back)} }
