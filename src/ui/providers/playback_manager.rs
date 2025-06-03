@@ -26,7 +26,6 @@ impl PlaybackManager {
     }
 
     pub fn update_playhead(&mut self, new_playhead: u32, score: &Score) {
-        let current_state = (self.state)();
         let timestamps = score.get_note_timestamps();
 
         if timestamps
@@ -38,7 +37,6 @@ impl PlaybackManager {
 
         self.state.set(PlaybackState {
             playhead_timestamp: new_playhead,
-            ..current_state
         });
     }
 

@@ -33,7 +33,7 @@ impl MeasureScale {
             y_baseline,
             line_height,
             start_timestamp,
-            measure_length: measure_length,
+            measure_length,
         }
     }
 
