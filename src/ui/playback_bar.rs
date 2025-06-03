@@ -9,79 +9,22 @@ use crate::ui::providers::{
 pub fn PlaybackBar() -> Element {
     let mut playback_manager = use_playback_manager();
     let score = use_score_manager();
-    let measure_index = score()
-        .measures
-        .iter()
-        .enumerate()
-        .find(|(_, measure)| measure.timestamp > playback_manager.playhead_timestamp())
-        .map(|(i, ..)| i.saturating_sub(1))
-        .unwrap_or_else(|| score().measures.len().saturating_sub(1));
+    let measure_index = playback_manager.calculate_measure_index(&score());
     let number_of_measures = score().measures.len() as u32;
 
-    let note_timestamps = use_memo(move || {
-        let mut timestamps = vec![];
-
-        for measure in score().measures {
-            for note in &measure.notes {
-                if let Some(&last_timestamp) = timestamps.last() {
-                    if last_timestamp < note.timestamp {
-                        timestamps.push(note.timestamp);
-                    }
-                } else {
-                    timestamps.push(note.timestamp);
-                }
-            }
-        }
-
-        timestamps
-    });
-
-    let handle_skip_back = move |_: MouseEvent| {
+    let handle_skip_measure_back = move |_: MouseEvent| {
         let new_measure_index = measure_index.saturating_sub(1);
-        let new_timestamp = score()
-            .measures
-            .get(new_measure_index)
-            .map(|measure| measure.timestamp)
-            .unwrap_or(0);
-
-        playback_manager.update_playhead(new_timestamp);
+        playback_manager.skip_to_measure(new_measure_index, &score());
     };
 
-    let handle_skip_forward = move |_: MouseEvent| {
+    let handle_skip_measure_forward = move |_: MouseEvent| {
         let new_measure_index = measure_index.saturating_add(1);
-
-        if let Some(new_timestamp) = score()
-            .measures
-            .get(new_measure_index)
-            .map(|measure| measure.timestamp)
-        {
-            playback_manager.update_playhead(new_timestamp);
-        }
+        playback_manager.skip_to_measure(new_measure_index, &score());
     };
 
-    let handle_prev_note = move |_: MouseEvent| {
-        let timestamps = note_timestamps();
-        if let Some(timestamp_index) = timestamps
-            .iter()
-            .position(|&ts| ts == playback_manager.playhead_timestamp())
-        {
-            if let Some(&next_timestamp) = timestamps.get(timestamp_index.saturating_sub(1)) {
-                playback_manager.update_playhead(next_timestamp);
-            }
-        }
-    };
+    let handle_prev_note = move |_: MouseEvent| playback_manager.skip_to_previous_note(&score());
 
-    let handle_next_note = move |_: MouseEvent| {
-        let timestamps = note_timestamps();
-        if let Some(timestamp_index) = timestamps
-            .iter()
-            .position(|&ts| ts == playback_manager.playhead_timestamp())
-        {
-            if let Some(&next_timestamp) = timestamps.get(timestamp_index.saturating_add(1)) {
-                playback_manager.update_playhead(next_timestamp);
-            }
-        }
-    };
+    let handle_next_note = move |_: MouseEvent| playback_manager.skip_to_next_note(&score());
 
     rsx! {
         div { class: "playback-bar-container",
@@ -94,11 +37,11 @@ pub fn PlaybackBar() -> Element {
                     value: measure_index + 1,
                 }
                 "/ {number_of_measures}"
-                button { onclick: handle_skip_back, {icon!(skip_back)} }
+                button { onclick: handle_skip_measure_back, {icon!(skip_back)} }
                 button { onclick: handle_prev_note, {icon!(chevron_left)} }
                 button { {icon!(play)} }
                 button { onclick: handle_next_note, {icon!(chevron_right)} }
-                button { onclick: handle_skip_forward, {icon!(skip_forward)} }
+                button { onclick: handle_skip_measure_forward, {icon!(skip_forward)} }
             }
         }
     }

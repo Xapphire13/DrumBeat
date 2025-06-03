@@ -1,5 +1,7 @@
 use dioxus::prelude::*;
 
+use crate::data::score::Score;
+
 #[derive(Clone)]
 pub struct PlaybackState {
     pub playhead_timestamp: u32,
@@ -19,6 +21,10 @@ pub struct PlaybackManager {
 }
 
 impl PlaybackManager {
+    pub fn new(state: Signal<PlaybackState>) -> Self {
+        Self { state }
+    }
+
     pub fn update_playhead(&mut self, new_playhead: u32) {
         let current_state = (self.state)();
 
@@ -31,12 +37,70 @@ impl PlaybackManager {
     pub fn playhead_timestamp(&self) -> u32 {
         (self.state)().playhead_timestamp
     }
+
+    pub fn calculate_measure_index(&self, score: &Score) -> usize {
+        score
+            .measures
+            .iter()
+            .enumerate()
+            .find(|(_, measure)| measure.timestamp > self.playhead_timestamp())
+            .map(|(i, ..)| i.saturating_sub(1))
+            .unwrap_or_else(|| score.measures.len().saturating_sub(1))
+    }
+
+    pub fn calculate_staff_number(&self, score: &Score, measures_per_staff: u32) -> u32 {
+        let mut ticks = 0;
+        for (staff_index, staff_measures) in score
+            .measures
+            .chunks(measures_per_staff as usize)
+            .enumerate()
+        {
+            ticks += staff_measures
+                .iter()
+                .map(|measure| measure.get_length())
+                .sum::<u32>();
+
+            if ticks > self.playhead_timestamp() {
+                return staff_index as u32;
+            }
+        }
+
+        0
+    }
+
+    pub fn skip_to_measure(&mut self, measure_index: usize, score: &Score) {
+        if let Some(measure) = score.measures.get(measure_index) {
+            self.update_playhead(measure.timestamp);
+        }
+    }
+
+    pub fn skip_to_next_note(&mut self, score: &Score) {
+        let timestamps = score.get_note_timestamps();
+        if let Some(current_index) = timestamps
+            .iter()
+            .position(|&ts| ts == self.playhead_timestamp())
+        {
+            if let Some(&next_timestamp) = timestamps.get(current_index + 1) {
+                self.update_playhead(next_timestamp);
+            }
+        }
+    }
+
+    pub fn skip_to_previous_note(&mut self, score: &Score) {
+        let timestamps = score.get_note_timestamps();
+        if let Some(current_index) = timestamps
+            .iter()
+            .position(|&ts| ts == self.playhead_timestamp())
+        {
+            if let Some(&prev_timestamp) = timestamps.get(current_index.saturating_sub(1)) {
+                self.update_playhead(prev_timestamp);
+            }
+        }
+    }
 }
 
 pub fn use_playback_manager() -> PlaybackManager {
     let playback_state = use_context::<Signal<PlaybackState>>();
 
-    PlaybackManager {
-        state: playback_state,
-    }
+    PlaybackManager::new(playback_state)
 }

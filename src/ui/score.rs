@@ -22,25 +22,8 @@ pub fn Score() -> Element {
     let mut score = use_score_manager();
     let measures_per_staff = ((width / 350.0).floor() as u32).max(1);
     let playback_manager = use_playback_manager();
-    let playhead_staff_number = use_memo(move || {
-        let mut ticks = 0;
-        for (staff_index, staff_measures) in score()
-            .measures
-            .chunks(measures_per_staff as usize)
-            .enumerate()
-        {
-            ticks += staff_measures
-                .iter()
-                .map(|measure| measure.get_length())
-                .sum::<u32>();
-
-            if ticks > playback_manager.playhead_timestamp() {
-                return staff_index as u32;
-            }
-        }
-
-        0
-    });
+    let playhead_staff_number =
+        use_memo(move || playback_manager.calculate_staff_number(&score(), measures_per_staff));
     let chunked_measures: Vec<Vec<Measure>> = score()
         .measures
         .chunks(measures_per_staff as usize)
