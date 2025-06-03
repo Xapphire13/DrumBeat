@@ -8,7 +8,10 @@ use midir::MidiInput;
 use crate::{
     data::app_mode::AppMode,
     ui::{
-        hooks::{use_playback_state_provider, use_score_provider},
+        providers::{
+            playback_manager::use_playback_manager_provider,
+            score_manager::use_score_manager_provider,
+        },
         score::Score,
         toolbar::Toolbar,
     },
@@ -20,8 +23,8 @@ const MAIN_CSS: Asset = asset!("/assets/main.css");
 #[component]
 pub fn App() -> Element {
     use_context_provider(|| Signal::new(AppMode::View));
-    use_playback_state_provider();
-    use_score_provider();
+    use_playback_manager_provider();
+    use_score_manager_provider();
 
     let mut midi_output = use_signal_sync(String::new);
     let _midi_connection = use_hook(|| {

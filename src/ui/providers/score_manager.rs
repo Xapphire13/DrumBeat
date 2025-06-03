@@ -7,7 +7,7 @@ use crate::data::{
     time_signature::TimeSignature,
 };
 
-pub fn use_score_provider() -> Signal<Score> {
+pub fn use_score_manager_provider() -> Signal<Score> {
     use_context_provider(|| {
         Signal::new(Score {
             measures: vec![
@@ -114,6 +114,6 @@ pub fn use_score_provider() -> Signal<Score> {
     })
 }
 
-pub fn use_score() -> Signal<Score> {
+pub fn use_score_manager() -> Signal<Score> {
     use_context::<Signal<Score>>()
 }

@@ -1,18 +1,19 @@
 use dioxus::prelude::*;
 use dioxus_feather_icons::prelude::*;
 
-use crate::ui::hooks::{PlaybackState, use_playback_state, use_score};
+use crate::ui::providers::{
+    playback_manager::use_playback_manager, score_manager::use_score_manager,
+};
 
 #[component]
 pub fn PlaybackBar() -> Element {
-    let mut playback_state_ctx = use_playback_state();
-    let playback_state = playback_state_ctx();
-    let score = use_score();
+    let mut playback_manager = use_playback_manager();
+    let score = use_score_manager();
     let measure_index = score()
         .measures
         .iter()
         .enumerate()
-        .find(|(_, measure)| measure.timestamp > playback_state.playhead_timestamp)
+        .find(|(_, measure)| measure.timestamp > playback_manager.playhead_timestamp())
         .map(|(i, ..)| i.saturating_sub(1))
         .unwrap_or_else(|| score().measures.len().saturating_sub(1));
     let number_of_measures = score().measures.len() as u32;
@@ -43,9 +44,7 @@ pub fn PlaybackBar() -> Element {
             .map(|measure| measure.timestamp)
             .unwrap_or(0);
 
-        playback_state_ctx.set(PlaybackState {
-            playhead_timestamp: new_timestamp,
-        });
+        playback_manager.update_playhead(new_timestamp);
     };
 
     let handle_skip_forward = move |_: MouseEvent| {
@@ -56,9 +55,7 @@ pub fn PlaybackBar() -> Element {
             .get(new_measure_index)
             .map(|measure| measure.timestamp)
         {
-            playback_state_ctx.set(PlaybackState {
-                playhead_timestamp: new_timestamp,
-            });
+            playback_manager.update_playhead(new_timestamp);
         }
     };
 
@@ -66,12 +63,10 @@ pub fn PlaybackBar() -> Element {
         let timestamps = note_timestamps();
         if let Some(timestamp_index) = timestamps
             .iter()
-            .position(|&ts| ts == playback_state.playhead_timestamp)
+            .position(|&ts| ts == playback_manager.playhead_timestamp())
         {
             if let Some(&next_timestamp) = timestamps.get(timestamp_index.saturating_sub(1)) {
-                playback_state_ctx.set(PlaybackState {
-                    playhead_timestamp: next_timestamp,
-                })
+                playback_manager.update_playhead(next_timestamp);
             }
         }
     };
@@ -80,12 +75,10 @@ pub fn PlaybackBar() -> Element {
         let timestamps = note_timestamps();
         if let Some(timestamp_index) = timestamps
             .iter()
-            .position(|&ts| ts == playback_state.playhead_timestamp)
+            .position(|&ts| ts == playback_manager.playhead_timestamp())
         {
             if let Some(&next_timestamp) = timestamps.get(timestamp_index.saturating_add(1)) {
-                playback_state_ctx.set(PlaybackState {
-                    playhead_timestamp: next_timestamp,
-                })
+                playback_manager.update_playhead(next_timestamp);
             }
         }
     };

@@ -8,7 +8,8 @@ use crate::{
         position::Position,
     },
     ui::{
-        hooks::{PlaybackState, use_haptic, use_playback_state},
+        hooks::use_haptic,
+        providers::playback_manager::use_playback_manager,
         score::{measure::Measure, measure_scale::MeasureScale},
     },
 };
@@ -23,7 +24,7 @@ pub fn Staff(
     /// Playhead timestamp, if within this staff
     playhead_timestamp: Option<u32>,
 ) -> Element {
-    let mut playback_state = use_playback_state();
+    let mut playback_manager = use_playback_manager();
     let feedback_manager = use_haptic();
     let app_mode = use_context::<Signal<AppMode>>();
     let mut mouse_position = use_signal::<Option<Position>>(|| None);
@@ -157,9 +158,7 @@ pub fn Staff(
             match app_mode() {
                 AppMode::View => {
                     if let Some((phantom_playhead_timestamp, ..)) = phantom_playhead() {
-                        playback_state.set(PlaybackState {
-                            playhead_timestamp: phantom_playhead_timestamp,
-                        });
+                        playback_manager.update_playhead(phantom_playhead_timestamp);
                     }
                 }
                 AppMode::Edit { .. } => {}
@@ -222,7 +221,7 @@ pub fn Staff(
                 }
 
                 // Phantom playhead (only in View mode)
-                if let Some((_,x)) = phantom_playhead() {
+                if let Some((_, x)) = phantom_playhead() {
                     line {
                         stroke: "#8F00FF",
                         stroke_width: 1.5,

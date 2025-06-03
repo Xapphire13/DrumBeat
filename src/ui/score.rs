@@ -4,8 +4,9 @@ use staff::Staff;
 use crate::{
     data::{measure::Measure, note::Note, score::Score as ScoreData},
     ui::{
-        hooks::{use_playback_state, use_score, use_size},
+        hooks::use_size,
         playback_bar::PlaybackBar,
+        providers::{playback_manager::use_playback_manager, score_manager::use_score_manager},
     },
 };
 
@@ -18,9 +19,9 @@ mod staff;
 #[component]
 pub fn Score() -> Element {
     let (width, _, handle_on_resize) = use_size();
-    let mut score = use_score();
+    let mut score = use_score_manager();
     let measures_per_staff = ((width / 350.0).floor() as u32).max(1);
-    let playback_state = use_playback_state();
+    let playback_manager = use_playback_manager();
     let playhead_staff_number = use_memo(move || {
         let mut ticks = 0;
         for (staff_index, staff_measures) in score()
@@ -33,7 +34,7 @@ pub fn Score() -> Element {
                 .map(|measure| measure.get_length())
                 .sum::<u32>();
 
-            if ticks > playback_state().playhead_timestamp {
+            if ticks > playback_manager.playhead_timestamp() {
                 return staff_index as u32;
             }
         }
@@ -100,7 +101,7 @@ pub fn Score() -> Element {
                             measures,
                             handle_add_note,
                             handle_remove_note,
-                            playhead_timestamp: if playhead_staff_number == i as u32 { Some(playback_state().playhead_timestamp) } else { None },
+                            playhead_timestamp: if playhead_staff_number == i as u32 { Some(playback_manager.playhead_timestamp()) } else { None },
                         }
                     })
             }
