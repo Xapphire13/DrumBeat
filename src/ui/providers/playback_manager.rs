@@ -25,8 +25,16 @@ impl PlaybackManager {
         Self { state }
     }
 
-    pub fn update_playhead(&mut self, new_playhead: u32) {
+    pub fn update_playhead(&mut self, new_playhead: u32, score: &Score) {
         let current_state = (self.state)();
+        let timestamps = score.get_note_timestamps();
+
+        if timestamps
+            .last()
+            .is_none_or(|&last_timestamp| new_playhead > last_timestamp)
+        {
+            return;
+        }
 
         self.state.set(PlaybackState {
             playhead_timestamp: new_playhead,
@@ -70,7 +78,7 @@ impl PlaybackManager {
 
     pub fn skip_to_measure(&mut self, measure_index: usize, score: &Score) {
         if let Some(measure) = score.measures.get(measure_index) {
-            self.update_playhead(measure.timestamp);
+            self.update_playhead(measure.timestamp, score);
         }
     }
 
@@ -81,7 +89,7 @@ impl PlaybackManager {
             .position(|&ts| ts == self.playhead_timestamp())
         {
             if let Some(&next_timestamp) = timestamps.get(current_index + 1) {
-                self.update_playhead(next_timestamp);
+                self.update_playhead(next_timestamp, score);
             }
         }
     }
@@ -93,7 +101,7 @@ impl PlaybackManager {
             .position(|&ts| ts == self.playhead_timestamp())
         {
             if let Some(&prev_timestamp) = timestamps.get(current_index.saturating_sub(1)) {
-                self.update_playhead(prev_timestamp);
+                self.update_playhead(prev_timestamp, score);
             }
         }
     }

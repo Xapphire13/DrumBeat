@@ -9,7 +9,7 @@ use crate::{
     },
     ui::{
         hooks::use_haptic,
-        providers::playback_manager::use_playback_manager,
+        providers::{playback_manager::use_playback_manager, score_manager::use_score_manager},
         score::{measure::Measure, measure_scale::MeasureScale},
     },
 };
@@ -26,6 +26,7 @@ pub fn Staff(
 ) -> Element {
     let mut playback_manager = use_playback_manager();
     let feedback_manager = use_haptic();
+    let score = use_score_manager();
     let app_mode = use_context::<Signal<AppMode>>();
     let mut mouse_position = use_signal::<Option<Position>>(|| None);
     let mut preview_note: Signal<Option<Note>> = use_signal(|| None);
@@ -158,7 +159,7 @@ pub fn Staff(
             match app_mode() {
                 AppMode::View => {
                     if let Some((phantom_playhead_timestamp, ..)) = phantom_playhead() {
-                        playback_manager.update_playhead(phantom_playhead_timestamp);
+                        playback_manager.update_playhead(phantom_playhead_timestamp, &score());
                     }
                 }
                 AppMode::Edit { .. } => {}
