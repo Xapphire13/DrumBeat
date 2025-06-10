@@ -10,9 +10,38 @@ use crate::{
     ui::{
         hooks::use_haptic,
         providers::{playback_manager::use_playback_manager, score_manager::use_score_manager},
-        score::{measure::Measure, measure_scale::MeasureScale},
+        score::{
+            measure::Measure,
+            measure_scale::{self, MeasureScale},
+        },
     },
 };
+
+const NUMBER_OF_LINES: u8 = 5;
+
+#[derive(PartialEq, Clone)]
+struct StaffDimensions {
+    width: f32,
+    height: f32,
+}
+
+#[component]
+fn StaffLines(line_height: f32, number_of_lines: u8, staff_dimensions: StaffDimensions) -> Element {
+    let StaffDimensions { width, .. } = staff_dimensions;
+
+    rsx! {
+        g {
+            for line_number in 1..=number_of_lines {
+                line {
+                    x1: "0",
+                    y1: "{(2. * line_height) + (line_number as f32)*line_height}",
+                    x2: "{width}",
+                    y2: "{(2. * line_height) + (line_number as f32)*line_height}",
+                }
+            }
+        }
+    }
+}
 
 #[component]
 pub fn Staff(
@@ -41,15 +70,16 @@ pub fn Staff(
         move |(playhead_timestamp, measures)| {
             playhead_timestamp.and_then(|playhead_timestamp| {
                 let scales = scales();
-                let measure_scale = scales.iter().enumerate().rev().find_map(|(i, scale)| {
+                let measure_scale = scales.iter().enumerate().find_map(|(i, scale)| {
                     measures.get(i).and_then(|measure| {
-                        if measure.timestamp <= playhead_timestamp {
+                        if measure.contains_timestamp(playhead_timestamp) {
                             Some(scale)
                         } else {
                             None
                         }
                     })
                 });
+
                 measure_scale.map(|measure_scale| measure_scale.get_x(playhead_timestamp))
             })
         },
@@ -82,21 +112,14 @@ pub fn Staff(
             style: "height: {height}px",
 
             svg { class: "staff", width: "{width}px", height: "{height}px",
-                // Staff lines
-                g {
-                    for line_number in 1..=5 {
-                        line {
-                            x1: "0",
-                            y1: "{(2. * line_height) + (line_number as f32)*line_height}",
-                            x2: "{width}",
-                            y2: "{(2. * line_height) + (line_number as f32)*line_height}",
-                        }
-                    }
+                StaffLines {
+                    line_height,
+                    number_of_lines: NUMBER_OF_LINES,
+                    staff_dimensions: StaffDimensions { width, height },
                 }
 
                 // Playhead
-                if let Some(x) = playhead_x_pos()
-                {
+                if let Some(x) = playhead_x_pos() {
                     line {
                         stroke: "#8F00FF",
                         stroke_width: 1.5,
