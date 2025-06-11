@@ -54,26 +54,6 @@ impl PlaybackManager {
             .unwrap_or_else(|| score.measures.len().saturating_sub(1))
     }
 
-    pub fn calculate_staff_number(&self, score: &Score, measures_per_staff: u32) -> u32 {
-        let mut ticks = 0;
-        for (staff_index, staff_measures) in score
-            .measures
-            .chunks(measures_per_staff as usize)
-            .enumerate()
-        {
-            ticks += staff_measures
-                .iter()
-                .map(|measure| measure.get_length())
-                .sum::<u32>();
-
-            if ticks > self.playhead_timestamp() {
-                return staff_index as u32;
-            }
-        }
-
-        0
-    }
-
     pub fn skip_to_measure(&mut self, measure_index: usize, score: &Score) {
         if let Some(measure) = score.measures.get(measure_index) {
             self.update_playhead(measure.timestamp, score);
