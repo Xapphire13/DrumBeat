@@ -3,11 +3,7 @@ use staff::Staff;
 
 use crate::{
     data::{measure::Measure, note::Note, score::Score as ScoreData},
-    ui::{
-        hooks::use_size,
-        playback_bar::PlaybackBar,
-        providers::{playback_manager::use_playback_manager, score_manager::use_score_manager},
-    },
+    ui::{hooks::use_size, playback_bar::PlaybackBar, providers::score_manager::use_score_manager},
 };
 
 mod measure;
@@ -16,14 +12,17 @@ mod note;
 mod preview_note;
 mod staff;
 
+#[derive(PartialEq, Clone)]
+pub struct StaffDimensions {
+    width: f32,
+    height: f32,
+}
+
 #[component]
 pub fn Score() -> Element {
     let (width, _, handle_on_resize) = use_size();
     let mut score = use_score_manager();
     let measures_per_staff = ((width / 350.0).floor() as u32).max(1);
-    let playback_manager = use_playback_manager();
-    let playhead_staff_number =
-        use_memo(move || playback_manager.calculate_staff_number(&score(), measures_per_staff));
     let chunked_measures: Vec<Vec<Measure>> = score()
         .measures
         .chunks(measures_per_staff as usize)
@@ -73,21 +72,17 @@ pub fn Score() -> Element {
     rsx! {
         div { class: "score", onresize: handle_on_resize,
 
-            {
-                chunked_measures
-                    .into_iter()
-                    .enumerate()
-                    .map(|(i, measures)| rsx! {
-                        Staff {
-                            width: width as f32,
-                            height: 120.0,
-                            measures,
-                            handle_add_note,
-                            handle_remove_note,
-                            playhead_timestamp: if playhead_staff_number == i as u32 { Some(playback_manager.playhead_timestamp()) } else { None },
-                        }
-                    })
-            }
+            {chunked_measures.into_iter().map(|measures| rsx! {
+                Staff {
+                    dimensions: StaffDimensions {
+                        width: width as f32,
+                        height: 120.0,
+                    },
+                    measures,
+                    handle_add_note,
+                    handle_remove_note,
+                }
+            })}
 
             PlaybackBar {}
         }

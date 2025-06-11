@@ -1,58 +1,41 @@
-use dioxus::{html::geometry::euclid::Point2D, prelude::*};
+use dioxus::prelude::*;
 
 use crate::{
     data::{
         app_mode::{AppMode, EditMode},
         measure::Measure as MeasureData,
         note::Note,
-        position::Position,
     },
     ui::{
-        hooks::use_haptic,
+        hooks::{MousePositionData, use_mouse_position},
         providers::{playback_manager::use_playback_manager, score_manager::use_score_manager},
         score::{
+            StaffDimensions,
             measure::Measure,
-            measure_scale::{self, MeasureScale},
+            measure_scale::MeasureScale,
+            staff::{
+                phantom_playhead::{PhantomPlayhead, use_phantom_playhead_data},
+                playhead::Playhead,
+                staff_lines::StaffLines,
+            },
         },
     },
 };
 
+mod phantom_playhead;
+mod playhead;
+mod staff_lines;
+
 const NUMBER_OF_LINES: u8 = 5;
-
-#[derive(PartialEq, Clone)]
-struct StaffDimensions {
-    width: f32,
-    height: f32,
-}
-
-#[component]
-fn StaffLines(line_height: f32, number_of_lines: u8, staff_dimensions: StaffDimensions) -> Element {
-    let StaffDimensions { width, .. } = staff_dimensions;
-
-    rsx! {
-        g {
-            for line_number in 1..=number_of_lines {
-                line {
-                    x1: "0",
-                    y1: "{(2. * line_height) + (line_number as f32)*line_height}",
-                    x2: "{width}",
-                    y2: "{(2. * line_height) + (line_number as f32)*line_height}",
-                }
-            }
-        }
-    }
-}
 
 #[component]
 pub fn Staff(
-    width: f32,
-    height: f32,
+    dimensions: StaffDimensions,
     measures: Vec<MeasureData>,
     handle_remove_note: Callback<Note>,
     handle_add_note: Callback<Note>,
-    /// Playhead timestamp, if within this staff
-    playhead_timestamp: Option<u32>,
 ) -> Element {
+    let StaffDimensions { width, height } = dimensions.clone();
     let mut playback_manager = use_playback_manager();
     let score = use_score_manager();
     let app_mode = use_context::<Signal<AppMode>>();
@@ -64,41 +47,26 @@ pub fn Staff(
     let mut preview_note: Signal<Option<Note>> = use_signal(|| None);
     let line_height = height / 8.;
     let scales = use_scales(&measures, width, height, line_height);
-    let phantom_playhead = use_phantom_playhead(&app_mode, &mouse_position, &scales(), &measures);
-    let playhead_x_pos = use_memo(use_reactive(
-        (&playhead_timestamp, &measures),
-        move |(playhead_timestamp, measures)| {
-            playhead_timestamp.and_then(|playhead_timestamp| {
-                let scales = scales();
-                let measure_scale = scales.iter().enumerate().find_map(|(i, scale)| {
-                    measures.get(i).and_then(|measure| {
-                        if measure.contains_timestamp(playhead_timestamp) {
-                            Some(scale)
-                        } else {
-                            None
-                        }
-                    })
-                });
+    let phantom_playhead_data =
+        use_phantom_playhead_data(&app_mode, &mouse_position, &scales(), &measures);
 
-                measure_scale.map(|measure_scale| measure_scale.get_x(playhead_timestamp))
-            })
-        },
-    ));
-
-    let handle_on_click = move |_: MouseEvent| match app_mode() {
-        AppMode::View => {
-            if let Some((phantom_playhead_timestamp, ..)) = phantom_playhead {
-                playback_manager.update_playhead(phantom_playhead_timestamp, &score());
-            }
-        }
-        AppMode::Edit { edit_mode, .. } => {
-            if let Some(note) = preview_note() {
-                match edit_mode {
-                    EditMode::Add => handle_add_note(note),
-                    EditMode::Remove => handle_remove_note(note),
+    let handle_on_click = {
+        let phantom_playhead_data = phantom_playhead_data.clone();
+        move |_: MouseEvent| match app_mode() {
+            AppMode::View => {
+                if let Some(data) = phantom_playhead_data.clone() {
+                    playback_manager.update_playhead(data.closest_timestamp, &score());
                 }
+            }
+            AppMode::Edit { edit_mode, .. } => {
+                if let Some(note) = preview_note() {
+                    match edit_mode {
+                        EditMode::Add => handle_add_note(note),
+                        EditMode::Remove => handle_remove_note(note),
+                    }
 
-                preview_note.set(None);
+                    preview_note.set(None);
+                }
             }
         }
     };
@@ -118,31 +86,14 @@ pub fn Staff(
                     staff_dimensions: StaffDimensions { width, height },
                 }
 
-                // Playhead
-                if let Some(x) = playhead_x_pos() {
-                    line {
-                        stroke: "#8F00FF",
-                        stroke_width: 1.5,
-
-                        x1: "{x}",
-                        y1: "0",
-                        x2: "{x}",
-                        y2: "{height}",
-                    }
+                Playhead {
+                    measures: measures.clone(),
+                    scales,
+                    staff_dimensions: dimensions.clone(),
                 }
 
-                // Phantom playhead (only in View mode)
-                if let Some((_, x)) = phantom_playhead {
-                    line {
-                        stroke: "#8F00FF",
-                        stroke_width: 1.5,
-                        stroke_opacity: 0.25,
-
-                        x1: "{x}",
-                        y1: "0",
-                        x2: "{x}",
-                        y2: "{height}",
-                    }
+                if let Some(data) = phantom_playhead_data {
+                    PhantomPlayhead { data, staff_dimensions: dimensions }
                 }
 
                 // Measures
@@ -214,107 +165,4 @@ fn use_scales(
             })
             .collect::<Vec<MeasureScale>>()
     }))
-}
-
-fn use_phantom_playhead(
-    app_mode: &Signal<AppMode>,
-    mouse_position: &Option<Position>,
-    scales: &Vec<MeasureScale>,
-    measures: &Vec<MeasureData>,
-) -> Option<(u32, f32)> {
-    let feedback_manager = use_haptic();
-
-    // Calculate phantom playhead position for View mode
-    let phantom_playhead = use_memo(use_reactive(
-        (app_mode, mouse_position, scales, measures),
-        |(app_mode, mouse_position, scales, measures)| {
-            if matches!(app_mode(), AppMode::View) {
-                if let Some(Position { x, .. }) = mouse_position {
-                    // Collect all note timestamps from this staff
-                    let mut note_timestamps = vec![];
-                    for measure in measures.iter() {
-                        for note in &measure.notes {
-                            note_timestamps.push(note.timestamp);
-                        }
-                    }
-
-                    if note_timestamps.is_empty() {
-                        return None;
-                    }
-
-                    // Convert mouse x position to estimated timestamp
-                    let mut mouse_timestamp = 0u32;
-                    for (i, scale) in scales.iter().enumerate() {
-                        if x >= scale.outer_x_bounds.0 && x <= scale.outer_x_bounds.1 {
-                            if let Some(measure) = measures.get(i) {
-                                let relative_x = (x - scale.outer_x_bounds.0)
-                                    / (scale.outer_x_bounds.1 - scale.outer_x_bounds.0);
-                                mouse_timestamp = measure.timestamp
-                                    + (relative_x * measure.get_length() as f32) as u32;
-                                break;
-                            }
-                        }
-                    }
-
-                    // Find closest actual note timestamp
-                    if let Some(&closest_timestamp) = note_timestamps
-                        .iter()
-                        .min_by_key(|&&ts| (ts as i64 - mouse_timestamp as i64).abs())
-                    {
-                        // Find which scale contains this timestamp and get x position
-                        for (i, scale) in scales.iter().enumerate() {
-                            if let Some(measure) = measures.get(i) {
-                                if closest_timestamp >= measure.timestamp
-                                    && closest_timestamp < measure.timestamp + measure.get_length()
-                                {
-                                    return Some((
-                                        closest_timestamp,
-                                        scale.get_x(closest_timestamp),
-                                    ));
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            None
-        },
-    ));
-
-    use_effect(move || {
-        if phantom_playhead().is_some() {
-            feedback_manager.trigger();
-        }
-    });
-
-    phantom_playhead()
-}
-
-struct MousePositionData {
-    mouse_position: Option<Position>,
-    handle_on_mouse_move: Callback<MouseEvent>,
-    handle_on_mouse_leave: Callback<MouseEvent>,
-}
-
-fn use_mouse_position() -> MousePositionData {
-    let mut mouse_position = use_signal::<Option<Position>>(|| None);
-
-    let handle_on_mouse_move = Callback::new(move |ev: MouseEvent| {
-        let Point2D { x, y, .. } = ev.coordinates().element();
-        mouse_position.set(Some(Position {
-            x: x as f32,
-            y: y as f32,
-        }));
-    });
-
-    let handle_on_mouse_leave = Callback::new(move |_: MouseEvent| {
-        mouse_position.set(None);
-        // preview_note.set(None);
-    });
-
-    MousePositionData {
-        mouse_position: mouse_position(),
-        handle_on_mouse_move,
-        handle_on_mouse_leave,
-    }
 }
