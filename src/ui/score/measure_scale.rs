@@ -28,10 +28,10 @@ impl MeasureScale {
         let measure_length = ticks_per_note * time_signature.notes_per_measure;
 
         MeasureScale {
+            line_height,
             outer_x_bounds,
             x_range,
             y_baseline,
-            line_height,
             start_timestamp,
             measure_length,
         }

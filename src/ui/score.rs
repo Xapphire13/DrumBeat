@@ -26,7 +26,7 @@ pub fn Score() -> Element {
     let chunked_measures: Vec<Vec<Measure>> = score()
         .measures
         .chunks(measures_per_staff as usize)
-        .map(|chunk| chunk.to_vec())
+        .map(<[Measure]>::to_vec)
         .collect();
 
     let handle_remove_note = move |note: Note| {

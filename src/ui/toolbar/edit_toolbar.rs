@@ -16,8 +16,8 @@ pub fn EditToolbar() -> Element {
                     note_value: note_value.clone(),
                     edit_mode,
                 },
-                current_mode => current_mode,
-            })
+                current_mode @ AppMode::View => current_mode,
+            });
         }
     };
 
@@ -28,8 +28,8 @@ pub fn EditToolbar() -> Element {
                     note_value,
                     edit_mode: edit_mode.clone(),
                 },
-                current_mode => current_mode,
-            })
+                current_mode @ AppMode::View => current_mode,
+            });
         }
     };
 

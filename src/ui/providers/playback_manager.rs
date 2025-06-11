@@ -50,8 +50,10 @@ impl PlaybackManager {
             .iter()
             .enumerate()
             .find(|(_, measure)| measure.timestamp > self.playhead_timestamp())
-            .map(|(i, ..)| i.saturating_sub(1))
-            .unwrap_or_else(|| score.measures.len().saturating_sub(1))
+            .map_or_else(
+                || score.measures.len().saturating_sub(1),
+                |(i, ..)| i.saturating_sub(1),
+            )
     }
 
     pub fn skip_to_measure(&mut self, measure_index: usize, score: &Score) {

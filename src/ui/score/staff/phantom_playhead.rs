@@ -54,7 +54,7 @@ pub fn use_phantom_playhead_data(
                 if let Some(Position { x, .. }) = mouse_position {
                     // Collect all note timestamps from this staff
                     let mut note_timestamps = vec![];
-                    for measure in measures.iter() {
+                    for measure in &measures {
                         for note in &measure.notes {
                             note_timestamps.push(note.timestamp);
                         }
@@ -81,7 +81,7 @@ pub fn use_phantom_playhead_data(
                     // Find closest actual note timestamp
                     if let Some(&closest_timestamp) = note_timestamps
                         .iter()
-                        .min_by_key(|&&ts| (ts as i64 - mouse_timestamp as i64).abs())
+                        .min_by_key(|&&ts| (i64::from(ts) - i64::from(mouse_timestamp)).abs())
                     {
                         // Find which scale contains this timestamp and get x position
                         for (i, scale) in scales.iter().enumerate() {
