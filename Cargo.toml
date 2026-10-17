@@ -11,7 +11,10 @@ dioxus = { version = "0.6.3", features = [] }
 dioxus-desktop = "0.6.3"
 dioxus-feather-icons = "0.2.3"
 midir = "0.10.1"
+quick-xml = { version = "0.37", features = ["serialize"] }
+serde = { version = "1", features = ["derive"] }
 trackpad_haptic = "0.1.1"
+zip = { version = "2.6", default-features = false, features = ["deflate"] }
 
 [features]
 default = ["desktop"]
