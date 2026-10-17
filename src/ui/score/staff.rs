@@ -1,11 +1,7 @@
 use dioxus::prelude::*;
 
 use crate::{
-    data::{
-        app_mode::{AppMode, EditMode},
-        measure::Measure as MeasureData,
-        note::Note,
-    },
+    data::measure::Measure as MeasureData,
     ui::{
         hooks::{MousePositionData, use_mouse_position},
         providers::{playback_manager::use_playback_manager, score_manager::use_score_manager},
@@ -29,44 +25,24 @@ mod staff_lines;
 const NUMBER_OF_LINES: u8 = 5;
 
 #[component]
-pub fn Staff(
-    dimensions: StaffDimensions,
-    measures: Vec<MeasureData>,
-    handle_remove_note: Callback<Note>,
-    handle_add_note: Callback<Note>,
-) -> Element {
+pub fn Staff(dimensions: StaffDimensions, measures: Vec<MeasureData>) -> Element {
     let StaffDimensions { width, height } = dimensions.clone();
     let mut playback_manager = use_playback_manager();
     let score = use_score_manager();
-    let app_mode = use_context::<Signal<AppMode>>();
     let MousePositionData {
-        mut mouse_position,
+        mouse_position,
         handle_on_mouse_move,
         handle_on_mouse_leave,
     } = use_mouse_position();
-    let mut preview_note: Signal<Option<Note>> = use_signal(|| None);
     let line_height = height / 8.;
     let scales = use_scales(&measures, width, height, line_height);
-    let phantom_playhead_data =
-        use_phantom_playhead_data(&app_mode, &mouse_position, &scales(), &measures);
+    let phantom_playhead_data = use_phantom_playhead_data(&mouse_position, &scales(), &measures);
 
     let handle_on_click = {
         let phantom_playhead_data = phantom_playhead_data.clone();
-        move |_: MouseEvent| match app_mode() {
-            AppMode::View => {
-                if let Some(data) = phantom_playhead_data.clone() {
-                    playback_manager.update_playhead(data.closest_timestamp, &score());
-                }
-            }
-            AppMode::Edit { edit_mode, .. } => {
-                if let Some(note) = preview_note() {
-                    match edit_mode {
-                        EditMode::Add => handle_add_note(note),
-                        EditMode::Remove => handle_remove_note(note),
-                    }
-
-                    preview_note.set(None);
-                }
+        move |_: MouseEvent| {
+            if let Some(data) = phantom_playhead_data.clone() {
+                playback_manager.update_playhead(data.closest_timestamp, &score());
             }
         }
     };
@@ -103,8 +79,6 @@ pub fn Staff(
                         .enumerate()
                         .filter_map(|(i, measure)| {
                             let scale = scales.get(i)?;
-                            let mouse_position = mouse_position
-                                .take_if(|position| scale.is_within_bounds(position));
                             let outer_left_bound = scale.outer_x_bounds.0;
                             Some(rsx! {
                                 // Draw vertical line between measures
@@ -116,14 +90,7 @@ pub fn Staff(
                                         y2: "{scale.get_y(3.5)}",
                                     }
                                 }
-                                Measure {
-                                    scale: scale.clone(),
-                                    notes: measure.notes,
-                                    mouse_position,
-                                    on_preview_note_created: move |note| {
-                                        preview_note.set(note);
-                                    },
-                                }
+                                Measure { scale: scale.clone(), notes: measure.notes }
                             })
                         })
                 }

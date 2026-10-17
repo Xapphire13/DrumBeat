@@ -1,6 +1,7 @@
-pub mod app_mode;
+pub mod drum_piece;
 pub mod measure;
 pub mod note;
 pub mod position;
 pub mod score;
+pub mod tempo;
 pub mod time_signature;

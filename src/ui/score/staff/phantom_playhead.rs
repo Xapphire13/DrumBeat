@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 
 use crate::{
-    data::{app_mode::AppMode, measure::Measure, position::Position},
+    data::{measure::Measure, position::Position},
     ui::{
         hooks::use_haptic,
         score::{StaffDimensions, measure_scale::MeasureScale},
@@ -42,58 +42,55 @@ pub fn PhantomPlayhead(data: PhantomPlayheadData, staff_dimensions: StaffDimensi
 }
 
 pub fn use_phantom_playhead_data(
-    app_mode: &Signal<AppMode>,
     mouse_position: &Option<Position>,
     scales: &Vec<MeasureScale>,
     measures: &Vec<Measure>,
 ) -> Option<PhantomPlayheadData> {
     let phantom_playhead = use_memo(use_reactive(
-        (app_mode, mouse_position, scales, measures),
-        |(app_mode, mouse_position, scales, measures)| {
-            if matches!(app_mode(), AppMode::View) {
-                if let Some(Position { x, .. }) = mouse_position {
-                    // Collect all note timestamps from this staff
-                    let mut note_timestamps = vec![];
-                    for measure in &measures {
-                        for note in &measure.notes {
-                            note_timestamps.push(note.timestamp);
+        (mouse_position, scales, measures),
+        |(mouse_position, scales, measures)| {
+            if let Some(Position { x, .. }) = mouse_position {
+                // Collect all note timestamps from this staff
+                let mut note_timestamps = vec![];
+                for measure in &measures {
+                    for note in &measure.notes {
+                        note_timestamps.push(note.timestamp);
+                    }
+                }
+
+                if note_timestamps.is_empty() {
+                    return None;
+                }
+
+                // Convert mouse x position to estimated timestamp
+                let mut mouse_timestamp = 0u32;
+                for (i, scale) in scales.iter().enumerate() {
+                    if x >= scale.outer_x_bounds.0 && x <= scale.outer_x_bounds.1 {
+                        if let Some(measure) = measures.get(i) {
+                            let relative_x = (x - scale.outer_x_bounds.0)
+                                / (scale.outer_x_bounds.1 - scale.outer_x_bounds.0);
+                            mouse_timestamp = measure.timestamp
+                                + (relative_x * measure.get_length() as f32) as u32;
+                            break;
                         }
                     }
+                }
 
-                    if note_timestamps.is_empty() {
-                        return None;
-                    }
-
-                    // Convert mouse x position to estimated timestamp
-                    let mut mouse_timestamp = 0u32;
+                // Find closest actual note timestamp
+                if let Some(&closest_timestamp) = note_timestamps
+                    .iter()
+                    .min_by_key(|&&ts| (i64::from(ts) - i64::from(mouse_timestamp)).abs())
+                {
+                    // Find which scale contains this timestamp and get x position
                     for (i, scale) in scales.iter().enumerate() {
-                        if x >= scale.outer_x_bounds.0 && x <= scale.outer_x_bounds.1 {
-                            if let Some(measure) = measures.get(i) {
-                                let relative_x = (x - scale.outer_x_bounds.0)
-                                    / (scale.outer_x_bounds.1 - scale.outer_x_bounds.0);
-                                mouse_timestamp = measure.timestamp
-                                    + (relative_x * measure.get_length() as f32) as u32;
-                                break;
-                            }
-                        }
-                    }
-
-                    // Find closest actual note timestamp
-                    if let Some(&closest_timestamp) = note_timestamps
-                        .iter()
-                        .min_by_key(|&&ts| (i64::from(ts) - i64::from(mouse_timestamp)).abs())
-                    {
-                        // Find which scale contains this timestamp and get x position
-                        for (i, scale) in scales.iter().enumerate() {
-                            if let Some(measure) = measures.get(i) {
-                                if closest_timestamp >= measure.timestamp
-                                    && closest_timestamp < measure.timestamp + measure.get_length()
-                                {
-                                    return Some(PhantomPlayheadData {
-                                        closest_timestamp,
-                                        x_pos: scale.get_x(closest_timestamp),
-                                    });
-                                }
+                        if let Some(measure) = measures.get(i) {
+                            if closest_timestamp >= measure.timestamp
+                                && closest_timestamp < measure.timestamp + measure.get_length()
+                            {
+                                return Some(PhantomPlayheadData {
+                                    closest_timestamp,
+                                    x_pos: scale.get_x(closest_timestamp),
+                                });
                             }
                         }
                     }

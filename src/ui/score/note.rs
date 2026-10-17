@@ -1,34 +1,15 @@
 use dioxus::prelude::*;
 
-use crate::data::{
-    note::{NoteValue, Surface},
-    position::Position,
-};
+use crate::data::{drum_piece::DrumPiece, note::NoteValue, position::Position};
 
 use super::measure_scale::MeasureScale;
-
-#[derive(Clone, PartialEq)]
-pub enum NoteColor {
-    Black,
-    Red,
-}
-
-impl NoteColor {
-    fn get_css_color(&self) -> &str {
-        match self {
-            NoteColor::Black => "black",
-            NoteColor::Red => "red",
-        }
-    }
-}
 
 #[component]
 pub fn Note(
     value: NoteValue,
-    surface: Surface,
+    drum_piece: DrumPiece,
     position: Position,
     scale: MeasureScale,
-    color: Option<NoteColor>,
 ) -> Element {
     let Position { x, y } = position;
     // Size calculations for note shapes
@@ -37,12 +18,12 @@ pub fn Note(
     // Calculate beam line position
     let beam_line_number = scale.get_beam_line_number(value);
     let beam_y = scale.get_y(beam_line_number);
-    let fill_color = color.as_ref().unwrap_or(&NoteColor::Black).get_css_color();
+    let fill_color = "black";
 
     rsx! {
         g {
-            match surface {
-                Surface::Hihat => {
+            match drum_piece.is_cymbal() {
+                true => {
                     rsx! {
                         // Note body - X shape
                         line {
@@ -61,7 +42,7 @@ pub fn Note(
                             stroke: fill_color,
                             stroke_width: 1.5,
                         }
-                        // Stem line to beam for hihat (from top right corner)
+                        // Stem line to beam for cymbals (from top right corner)
                         line {
                             x1: x + size,
                             y1: y - size,
@@ -72,7 +53,7 @@ pub fn Note(
                         }
                     }
                 }
-                _ => {
+                false => {
                     let ellipse_rx = scale.line_height / 2.0;
                     let ellipse_ry = scale.line_height * 0.3;
                     rsx! {
