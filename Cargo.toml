@@ -7,12 +7,14 @@ edition = "2024"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dioxus = { version = "0.6.3", features = [] }
-dioxus-desktop = "0.6.3"
+dioxus = { version = "0.7.9", features = [] }
+dioxus-desktop = "0.7.9"
 dioxus-feather-icons = "0.2.3"
 midir = "0.10.1"
 quick-xml = { version = "0.37", features = ["serialize"] }
+rfd = { version = "0.17", default-features = false }
 serde = { version = "1", features = ["derive"] }
+tokio = { version = "1", features = ["time"] }
 trackpad_haptic = "0.1.1"
 zip = { version = "2.6", default-features = false, features = ["deflate"] }
 

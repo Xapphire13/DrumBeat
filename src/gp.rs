@@ -4,6 +4,7 @@
 //! score as XML. This module reads the first drum track out of it into its
 //! own types, which are later converted into the app's data model.
 
+mod convert;
 mod fraction;
 mod gpif;
 

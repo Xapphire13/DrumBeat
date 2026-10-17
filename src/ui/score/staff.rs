@@ -6,7 +6,7 @@ use crate::{
         hooks::{MousePositionData, use_mouse_position},
         providers::{playback_manager::use_playback_manager, score_manager::use_score_manager},
         score::{
-            StaffDimensions,
+            StaffDimensions, StaffLayout,
             measure::Measure,
             measure_scale::MeasureScale,
             staff::{
@@ -24,9 +24,16 @@ mod staff_lines;
 
 const NUMBER_OF_LINES: u8 = 5;
 
+pub fn line_height(staff_height: f32) -> f32 {
+    staff_height / 8.
+}
+
 #[component]
-pub fn Staff(dimensions: StaffDimensions, measures: Vec<MeasureData>) -> Element {
+pub fn Staff(dimensions: StaffDimensions, layout: StaffLayout) -> Element {
     let StaffDimensions { width, height } = dimensions.clone();
+    let StaffLayout { measures, widths } = layout;
+    // A short last staff doesn't fill the whole width
+    let content_width: f32 = widths.iter().sum();
     let mut playback_manager = use_playback_manager();
     let score = use_score_manager();
     let MousePositionData {
@@ -34,8 +41,8 @@ pub fn Staff(dimensions: StaffDimensions, measures: Vec<MeasureData>) -> Element
         handle_on_mouse_move,
         handle_on_mouse_leave,
     } = use_mouse_position();
-    let line_height = height / 8.;
-    let scales = use_scales(&measures, width, height, line_height);
+    let line_height = line_height(height);
+    let scales = use_scales(&measures, &widths, height, line_height);
     let phantom_playhead_data = use_phantom_playhead_data(&mouse_position, &scales(), &measures);
 
     let handle_on_click = {
@@ -59,7 +66,10 @@ pub fn Staff(dimensions: StaffDimensions, measures: Vec<MeasureData>) -> Element
                 StaffLines {
                     line_height,
                     number_of_lines: NUMBER_OF_LINES,
-                    staff_dimensions: StaffDimensions { width, height },
+                    staff_dimensions: StaffDimensions {
+                        width: content_width,
+                        height,
+                    },
                 }
 
                 Playhead {
@@ -74,10 +84,11 @@ pub fn Staff(dimensions: StaffDimensions, measures: Vec<MeasureData>) -> Element
 
                 // Measures
                 {
+                    let number_of_measures = measures.len();
                     measures
                         .into_iter()
                         .enumerate()
-                        .filter_map(|(i, measure)| {
+                        .filter_map(move |(i, measure)| {
                             let scale = scales.get(i)?;
                             let outer_left_bound = scale.outer_x_bounds.0;
                             Some(rsx! {
@@ -87,6 +98,15 @@ pub fn Staff(dimensions: StaffDimensions, measures: Vec<MeasureData>) -> Element
                                         x1: "{outer_left_bound}",
                                         y1: "{scale.get_y(-0.5)}",
                                         x2: "{outer_left_bound}",
+                                        y2: "{scale.get_y(3.5)}",
+                                    }
+                                }
+                                // Close the staff after its last measure
+                                if i + 1 == number_of_measures {
+                                    line {
+                                        x1: "{scale.outer_x_bounds.1 - 0.5}",
+                                        y1: "{scale.get_y(-0.5)}",
+                                        x2: "{scale.outer_x_bounds.1 - 0.5}",
                                         y2: "{scale.get_y(3.5)}",
                                     }
                                 }
@@ -101,35 +121,30 @@ pub fn Staff(dimensions: StaffDimensions, measures: Vec<MeasureData>) -> Element
 
 fn use_scales(
     measures: &Vec<MeasureData>,
-    width: f32,
+    widths: &Vec<f32>,
     height: f32,
     line_height: f32,
 ) -> Memo<Vec<MeasureScale>> {
-    let num_measures = measures.len() as f32;
+    use_memo(use_reactive(
+        (measures, widths, &height),
+        move |(measures, widths, height)| {
+            let mut left_bound = 0.0;
+            measures
+                .iter()
+                .zip(&widths)
+                .map(|(measure, width)| {
+                    let right_bound = left_bound + width;
+                    let scale = MeasureScale::new(
+                        (left_bound, right_bound),
+                        height - 1.5 * line_height,
+                        line_height,
+                        measure,
+                    );
 
-    use_memo(use_reactive(measures, move |measures| {
-        let mut cumulative_timestamp = 0;
-        measures
-            .iter()
-            .enumerate()
-            .map(|(i, measure)| {
-                let left_bound = (i as f32) * width / num_measures;
-                let right_bound = (i as f32 + 1.) * width / num_measures;
-                let padded_left_bound = left_bound + 1.5 * line_height;
-                let padded_right_bound = right_bound - 0.5 * line_height;
-
-                let scale = MeasureScale::new(
-                    (left_bound, right_bound),
-                    (padded_left_bound, padded_right_bound),
-                    height - 1.5 * line_height,
-                    line_height,
-                    cumulative_timestamp,
-                    measure.time_signature.clone(),
-                );
-
-                cumulative_timestamp += measure.get_length();
-                scale
-            })
-            .collect::<Vec<MeasureScale>>()
-    }))
+                    left_bound = right_bound;
+                    scale
+                })
+                .collect::<Vec<MeasureScale>>()
+        },
+    ))
 }

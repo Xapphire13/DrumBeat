@@ -7,7 +7,8 @@ use midir::MidiInput;
 
 use crate::ui::{
     providers::{
-        playback_manager::use_playback_manager_provider, score_manager::use_score_manager_provider,
+        playback_manager::{use_playback_manager, use_playback_manager_provider},
+        score_manager::{load_score, use_score_manager, use_score_manager_provider},
     },
     score::Score,
 };
@@ -50,8 +51,44 @@ pub fn App() -> Element {
         document::Link { rel: "icon", href: FAVICON }
         document::Link { rel: "stylesheet", href: MAIN_CSS }
 
+        Toolbar {}
         div { "MIDI: {midi_output}" }
 
         Score {}
+    }
+}
+
+#[component]
+fn Toolbar() -> Element {
+    let mut score = use_score_manager();
+    let mut playback_manager = use_playback_manager();
+    let mut error = use_signal(|| None::<String>);
+
+    let handle_open = move |_: MouseEvent| {
+        let Some(path) = rfd::FileDialog::new()
+            .add_filter("Guitar Pro 8", &["gp"])
+            .pick_file()
+        else {
+            return;
+        };
+
+        match load_score(&path) {
+            Ok(new_score) => {
+                playback_manager.reset();
+                score.set(new_score);
+                error.set(None);
+            }
+            Err(e) => error.set(Some(format!("Couldn't open {}: {e}", path.display()))),
+        }
+    };
+
+    rsx! {
+        div { class: "toolbar",
+            button { onclick: handle_open, "Open…" }
+            span { class: "score-title", "{score().title}" }
+            if let Some(error) = error() {
+                span { class: "error", "{error}" }
+            }
+        }
     }
 }

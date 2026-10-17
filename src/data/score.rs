@@ -2,11 +2,27 @@ use super::{measure::Measure, tempo::TempoMap};
 
 #[derive(Clone, PartialEq)]
 pub struct Score {
+    pub title: String,
     pub measures: Vec<Measure>,
     pub tempo_map: TempoMap,
 }
 
 impl Score {
+    pub fn empty() -> Self {
+        Self {
+            title: String::new(),
+            measures: vec![],
+            tempo_map: TempoMap::new(120.0),
+        }
+    }
+
+    /// The timestamp where the last measure ends
+    pub fn end_timestamp(&self) -> u32 {
+        self.measures
+            .last()
+            .map_or(0, |measure| measure.timestamp + measure.get_length())
+    }
+
     /// Get the sorted, unique timestamps of every note that is played (tied
     /// continuations are skipped)
     pub fn get_note_timestamps(&self) -> Vec<u32> {

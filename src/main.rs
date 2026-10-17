@@ -2,7 +2,7 @@ use dioxus_desktop::{Config, WindowBuilder};
 use ui::app::App;
 
 mod data;
-// Not wired into the app yet
+// The loader reads more of the file than the app uses yet
 #[allow(dead_code)]
 mod gp;
 mod ui;

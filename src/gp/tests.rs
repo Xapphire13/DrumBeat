@@ -229,6 +229,8 @@ fn loads_fixture_file() {
         return;
     };
     let score = load(&path).unwrap();
+    let converted = score.to_score().unwrap();
+    assert_eq!(converted.measures.len(), score.bars.len());
     for (index, bar) in score.bars.iter().enumerate() {
         for voice in &bar.voices {
             let Some(last) = voice.beats.last() else {
@@ -241,4 +243,29 @@ fn loads_fixture_file() {
             );
         }
     }
+}
+
+#[test]
+fn converts_to_the_app_score() {
+    let score = parse_gpif(GPIF).unwrap().to_score().unwrap();
+    assert_eq!(score.title, "Test Song");
+    assert_eq!(score.measures.len(), 2);
+
+    let first = &score.measures[0];
+    assert_eq!(first.timestamp, 0);
+    assert_eq!(first.get_length(), 3360);
+    let timestamps: Vec<u32> = first.notes.iter().map(|n| n.timestamp).collect();
+    // The snare triplet, the rim shot and the kick in voice 0 (the grace
+    // hi-hat is dropped), then the crash in voice 1
+    assert_eq!(timestamps, vec![0, 320, 640, 960, 0]);
+
+    let second = &score.measures[1];
+    assert_eq!(second.timestamp, 3360);
+    assert!(second.notes[0].tied);
+
+    // 60 BPM in dotted quarters, halfway through the 4/4 bar
+    let changes = score.tempo_map.changes();
+    assert_eq!(changes.len(), 2);
+    assert_eq!(changes[1].timestamp, 3360 + 1920);
+    assert!((changes[1].bpm - 90.0).abs() < 1e-9);
 }

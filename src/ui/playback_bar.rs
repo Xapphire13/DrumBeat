@@ -26,6 +26,15 @@ pub fn PlaybackBar() -> Element {
 
     let handle_next_note = move |_: MouseEvent| playback_manager.skip_to_next_note(&score());
 
+    let is_playing = playback_manager.is_playing();
+    let handle_play_pause = move |_: MouseEvent| {
+        if is_playing {
+            playback_manager.pause();
+        } else {
+            playback_manager.play(&score());
+        }
+    };
+
     rsx! {
         div { class: "playback-bar-container",
 
@@ -39,7 +48,13 @@ pub fn PlaybackBar() -> Element {
                 "/ {number_of_measures}"
                 button { onclick: handle_skip_measure_back, {icon!(skip_back)} }
                 button { onclick: handle_prev_note, {icon!(chevron_left)} }
-                button { {icon!(play)} }
+                button { onclick: handle_play_pause,
+                    if is_playing {
+                        {icon!(pause)}
+                    } else {
+                        {icon!(play)}
+                    }
+                }
                 button { onclick: handle_next_note, {icon!(chevron_right)} }
                 button { onclick: handle_skip_measure_forward, {icon!(skip_forward)} }
             }

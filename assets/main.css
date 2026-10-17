@@ -17,14 +17,40 @@ body {
     display: flex;
     flex-direction: column;
     flex-grow: 1;
+    min-height: 0;
+}
+
+.staves {
+    flex-grow: 1;
+    overflow-y: auto;
+    /* Keep the last staff clear of the playback bar */
+    padding-bottom: 96px;
+}
+
+.empty-score {
+    padding: 32px;
+    text-align: center;
+    color: #a0a4ad;
 }
 
 .toolbar {
     display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px;
+}
+
+.score-title {
+    font-weight: 600;
+}
+
+.error {
+    color: #ff6b6b;
 }
 
 .staff-container {
     position: relative;
+    flex-shrink: 0;
     background: white;
     color: black;
     display: flex;

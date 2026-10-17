@@ -63,18 +63,10 @@ pub fn use_phantom_playhead_data(
                 }
 
                 // Convert mouse x position to estimated timestamp
-                let mut mouse_timestamp = 0u32;
-                for (i, scale) in scales.iter().enumerate() {
-                    if x >= scale.outer_x_bounds.0 && x <= scale.outer_x_bounds.1 {
-                        if let Some(measure) = measures.get(i) {
-                            let relative_x = (x - scale.outer_x_bounds.0)
-                                / (scale.outer_x_bounds.1 - scale.outer_x_bounds.0);
-                            mouse_timestamp = measure.timestamp
-                                + (relative_x * measure.get_length() as f32) as u32;
-                            break;
-                        }
-                    }
-                }
+                let mouse_timestamp = scales
+                    .iter()
+                    .find(|scale| x >= scale.outer_x_bounds.0 && x <= scale.outer_x_bounds.1)
+                    .map_or(0, |scale| scale.get_timestamp(x));
 
                 // Find closest actual note timestamp
                 if let Some(&closest_timestamp) = note_timestamps
@@ -82,18 +74,14 @@ pub fn use_phantom_playhead_data(
                     .min_by_key(|&&ts| (i64::from(ts) - i64::from(mouse_timestamp)).abs())
                 {
                     // Find which scale contains this timestamp and get x position
-                    for (i, scale) in scales.iter().enumerate() {
-                        if let Some(measure) = measures.get(i) {
-                            if closest_timestamp >= measure.timestamp
-                                && closest_timestamp < measure.timestamp + measure.get_length()
-                            {
-                                return Some(PhantomPlayheadData {
-                                    closest_timestamp,
-                                    x_pos: scale.get_x(closest_timestamp),
-                                });
-                            }
-                        }
-                    }
+                    return scales
+                        .iter()
+                        .zip(&measures)
+                        .find(|(_, measure)| measure.contains_timestamp(closest_timestamp))
+                        .map(|(scale, _)| PhantomPlayheadData {
+                            closest_timestamp,
+                            x_pos: scale.get_x(closest_timestamp),
+                        });
                 }
             }
             None
