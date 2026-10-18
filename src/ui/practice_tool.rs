@@ -18,8 +18,15 @@ const SOUNDS: [ClickSound; 4] = [
     ClickSound::Cowbell,
 ];
 
-/// Taps further apart than this start counting the tempo again
+/// Only taps this recent count towards the tempo, so it follows a change of
+/// pace quickly
 const TAP_WINDOW: Duration = Duration::from_millis(2500);
+
+/// The most taps averaged, latest first
+const MAX_TAPS: usize = 5;
+
+/// The tempo slider moves in steps this big; − and + fine-tune it
+const SLIDER_STEP: u32 = 5;
 
 /// The standalone metronome: the beat and tempo on a stage, with its
 /// settings in a panel beside it
@@ -45,16 +52,14 @@ fn Stage() -> Element {
 
     // Taps within the window of each other, latest last
     let mut taps = use_signal(Vec::<Instant>::new);
+    // On press rather than release, which is when the beat is felt
     let handle_tap = move |_: MouseEvent| {
         let now = Instant::now();
         let mut taps = taps.write();
-        if taps
-            .last()
-            .is_some_and(|&last| now.duration_since(last) > TAP_WINDOW)
-        {
-            taps.clear();
-        }
+        taps.retain(|&tap| now.duration_since(tap) <= TAP_WINDOW);
         taps.push(now);
+        let excess = taps.len().saturating_sub(MAX_TAPS);
+        taps.drain(..excess);
         if let Some(bpm) = tapped_bpm(&taps) {
             practice.set_bpm(bpm);
         }
@@ -132,7 +137,7 @@ fn Stage() -> Element {
                     style: "--fill: {slider_fill}%",
                     min: MIN_BPM,
                     max: MAX_BPM,
-                    step: 1,
+                    step: SLIDER_STEP,
                     value: bpm,
                     oninput: move |event: FormEvent| {
                         if let Ok(bpm) = event.value().parse::<u32>() {
@@ -145,7 +150,7 @@ fn Stage() -> Element {
                 button {
                     class: "tap-button",
                     title: "Tap the tempo",
-                    onclick: handle_tap,
+                    onmousedown: handle_tap,
                     "TAP"
                 }
                 button {
