@@ -31,10 +31,8 @@ const SLIDER_STEP: u32 = 10;
 /// Holding − or + steps the tempo this far at a time
 const HOLD_STEP: u32 = 5;
 
-/// How long − or + is held before it starts stepping, and how often it steps
-/// after that
-const HOLD_DELAY: Duration = Duration::from_millis(400);
-const HOLD_REPEAT: Duration = Duration::from_millis(350);
+/// How long − or + is held before each step
+const HOLD_INTERVAL: Duration = Duration::from_millis(400);
 
 /// The standalone metronome: the beat and tempo on a stage, with its
 /// settings in a panel beside it
@@ -199,8 +197,8 @@ fn StepButton(faster: bool, disabled: bool) -> Element {
         stop();
         stepped.set(false);
         hold.set(Some(spawn(async move {
-            tokio::time::sleep(HOLD_DELAY).await;
             loop {
+                tokio::time::sleep(HOLD_INTERVAL).await;
                 stepped.set(true);
                 let bpm = practice.bpm();
                 practice.set_bpm(if faster {
@@ -208,7 +206,6 @@ fn StepButton(faster: bool, disabled: bool) -> Element {
                 } else {
                     bpm.saturating_sub(1) / HOLD_STEP * HOLD_STEP
                 });
-                tokio::time::sleep(HOLD_REPEAT).await;
             }
         })));
     };
