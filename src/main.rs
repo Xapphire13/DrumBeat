@@ -1,6 +1,7 @@
 use dioxus_desktop::{Config, LogicalSize, WindowBuilder};
 use ui::app::App;
 
+mod audio;
 mod data;
 // The loader reads more of the file than the app uses yet
 #[allow(dead_code)]

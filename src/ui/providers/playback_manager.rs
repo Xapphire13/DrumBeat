@@ -2,7 +2,7 @@ use std::time::{Duration, Instant};
 
 use dioxus::{core::Task, prelude::*};
 
-use crate::data::score::Score;
+use crate::{audio, data::score::Score};
 
 /// How often the playhead moves while playing
 const FRAME_INTERVAL: Duration = Duration::from_millis(16);
@@ -86,6 +86,7 @@ impl PlaybackManager {
         if let Some(clock) = &mut state.clock {
             clock.started_at = Instant::now();
             clock.start_seconds = score.performance.tempo_map().ticks_to_seconds(timestamp);
+            audio::seek(clock.start_seconds);
         }
     }
 
@@ -114,6 +115,9 @@ impl PlaybackManager {
         if let Some(clock) = &mut state.clock {
             clock.start_seconds = clock.seconds(old_speed);
             clock.started_at = Instant::now();
+        }
+        if state.clock.is_some() {
+            audio::set_speed(speed);
         }
         state.speed = speed;
     }
@@ -152,6 +156,7 @@ impl PlaybackManager {
                 if timestamp >= f64::from(end_timestamp) {
                     // Finished: rewind so the next play starts from the top
                     state.clock = None;
+                    audio::stop();
                     state.performance_timestamp = 0;
                     state.playhead_timestamp = 0;
                     break;
@@ -160,6 +165,8 @@ impl PlaybackManager {
                 state.playhead_timestamp = performance.to_written(timestamp as u32);
             }
         });
+
+        audio::play(audio::score_hits(score), start_seconds, state.peek().speed);
 
         let mut state = state.write();
         state.performance_timestamp = start_timestamp;
@@ -175,6 +182,7 @@ impl PlaybackManager {
     pub fn pause(&mut self) {
         if let Some(clock) = self.state.write().clock.take() {
             clock.task.cancel();
+            audio::stop();
         }
     }
 
