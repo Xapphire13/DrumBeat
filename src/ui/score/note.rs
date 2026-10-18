@@ -1,8 +1,8 @@
 use dioxus::prelude::*;
 
 use crate::data::{
-    drum_piece::DrumPiece,
-    note::{Articulation, NoteValue},
+    drum_voice::{DrumVoice, NoteHead},
+    note::NoteValue,
     position::Position,
 };
 
@@ -35,12 +35,14 @@ fn ledger_lines(line_number: f32) -> Vec<f32> {
 }
 
 /// A note head, with any ledger lines it needs. Stems and beams are drawn
-/// separately, per chord
+/// separately, per chord. Hovering it names the voice and Guitar Pro's number
+/// for it
 #[component]
 pub fn Note(
     value: NoteValue,
-    drum_piece: DrumPiece,
-    articulation: Articulation,
+    voice: DrumVoice,
+    /// Guitar Pro's number for the sound
+    gp_note: u8,
     position: Position,
     scale: MeasureScale,
 ) -> Element {
@@ -49,13 +51,22 @@ pub fn Note(
     let fill_color = "black";
     let is_hollow = matches!(value, NoteValue::Whole | NoteValue::Half);
     let ledger_half_width = 0.85 * scale.unit;
-    let ledger_ys: Vec<f32> = ledger_lines(MeasureScale::get_line_number(drum_piece))
+    let ledger_ys: Vec<f32> = ledger_lines(MeasureScale::get_line_number(voice.piece()))
         .into_iter()
         .map(|line| scale.get_y(line))
         .collect();
 
     rsx! {
-        g {
+        g { class: "note-head",
+            title { "{voice.name()} · {gp_note}" }
+            // Something to hover over between the thin lines of an X
+            rect {
+                x: x - size,
+                y: y - size,
+                width: 2.0 * size,
+                height: 2.0 * size,
+                fill: "transparent",
+            }
             for ledger_y in ledger_ys {
                 line {
                     x1: x - ledger_half_width,
@@ -66,7 +77,7 @@ pub fn Note(
                     stroke_width: 1,
                 }
             }
-            if articulation == Articulation::RideBell {
+            if voice.head() == NoteHead::Diamond {
                 // Hollow diamond head for the ride's bell. Its stem starts
                 // from the right (or, stem down, left) vertex
                 polygon {
@@ -75,7 +86,16 @@ pub fn Note(
                     stroke: fill_color,
                     stroke_width: 1.5,
                 }
-            } else if drum_piece.is_cymbal() {
+            } else if voice.head() == NoteHead::Triangle {
+                // Triangle head for the cowbell, pointing up
+                polygon {
+                    points: "{x - size},{y + size} {x + size},{y + size} {x},{y - size}",
+                    fill: fill_color,
+                    stroke: fill_color,
+                    stroke_width: 1.5,
+                    stroke_linejoin: "round",
+                }
+            } else if voice.head() == NoteHead::X {
                 // Note body - X shape
                 line {
                     x1: x - size,

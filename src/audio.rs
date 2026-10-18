@@ -35,6 +35,9 @@ use voice::{Sound, Voice};
 /// The most voices that ring at once. The oldest is dropped past this
 const MAX_VOICES: usize = 64;
 
+/// How long a choked cymbal rings before it's grabbed, in seconds
+const CHOKE_AFTER: f32 = 0.06;
+
 /// Scales the mix down so several hits at once don't clip
 const MASTER_GAIN: f32 = 0.5;
 
@@ -746,13 +749,20 @@ impl Mixer {
                 }
             }
         }
+        if hit.choke {
+            // Grabbing the cymbal stops it ringing from before too
+            for voice in &mut self.music.voices {
+                if voice.sound() == hit.sound {
+                    voice.choke();
+                }
+            }
+        }
         let seed = self.next_seed();
-        self.music.push(Voice::new(
-            hit.sound,
-            hit.velocity,
-            self.sample_rate as f32,
-            seed,
-        ));
+        let mut voice = Voice::new(hit.sound, hit.velocity, self.sample_rate as f32, seed);
+        if hit.choke {
+            voice.choke_after(CHOKE_AFTER);
+        }
+        self.music.push(voice);
     }
 
     fn trigger_click(&mut self, click: Click) {
@@ -793,6 +803,7 @@ mod tests {
         Hit {
             seconds,
             sound: Sound::Snare,
+            choke: false,
             midi_note: 38,
             velocity: 1.0,
         }

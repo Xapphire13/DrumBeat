@@ -2,7 +2,8 @@ use dioxus::prelude::*;
 
 use crate::{
     data::{
-        note::{Articulation, GraceNote, NoteValue},
+        drum_voice::NoteHead,
+        note::{GraceNote, NoteValue},
         position::Position,
     },
     ui::score::{
@@ -50,7 +51,8 @@ fn grace_runs(scale: &MeasureScale, grace_notes: &[GraceNote]) -> Vec<GraceRun> 
     let mut heads: Vec<Head> = grace_notes
         .iter()
         .filter_map(|grace| {
-            let drum_piece = grace.drum_piece()?;
+            let voice = grace.drum_voice()?;
+            let drum_piece = voice.piece();
             Some(Head {
                 run: RunKey {
                     main_timestamp: grace.main_timestamp,
@@ -60,7 +62,7 @@ fn grace_runs(scale: &MeasureScale, grace_notes: &[GraceNote]) -> Vec<GraceRun> 
                 steps_before_main: grace.steps_before_main,
                 x: scale.get_grace_x(grace),
                 line: MeasureScale::get_line_number(drum_piece),
-                is_x: drum_piece.is_cymbal() && grace.articulation != Articulation::RideBell,
+                is_x: voice.head() == NoteHead::X,
             })
         })
         .collect();
@@ -111,15 +113,15 @@ pub fn GraceNotes(scale: MeasureScale, grace_notes: Vec<GraceNote>) -> Element {
     let unit = small.unit;
     let head = head_half_width(unit);
     let heads = grace_notes.iter().filter_map(|grace| {
-        let drum_piece = grace.drum_piece()?;
+        let voice = grace.drum_voice()?;
         Some(rsx! {
             Note {
                 value: NoteValue::Eighth,
-                drum_piece,
-                articulation: grace.articulation,
+                voice,
+                gp_note: grace.midi_note,
                 position: Position {
                     x: scale.get_grace_x(grace),
-                    y: scale.get_y(MeasureScale::get_line_number(drum_piece)),
+                    y: scale.get_y(MeasureScale::get_line_number(voice.piece())),
                 },
                 scale: small.clone(),
             }

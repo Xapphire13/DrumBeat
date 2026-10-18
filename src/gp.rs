@@ -168,10 +168,8 @@ pub struct Tuplet {
 
 #[derive(Clone, PartialEq, Debug)]
 pub struct GpNote {
-    /// The General MIDI percussion note number, e.g. 38 for an acoustic snare
+    /// Guitar Pro's number for the sound, e.g. 91 for a rim shot
     pub midi_note: u8,
-    /// Guitar Pro's name for the sound, e.g. "Snare (rim shot)"
-    pub articulation: Option<String>,
     /// Tied into the next note
     pub tie_origin: bool,
     /// Continues a tied note, so it should not be played
@@ -271,13 +269,18 @@ pub fn parse_gpif(xml: &str) -> Result<GpScore, GpError> {
             .find(|p| p.name == "Midi")
             .and_then(|p| p.number)
             .and_then(|n| u8::try_from(n).ok());
+        // Older files have no input numbers, just the note it's played on
         let midi_note = articulation
-            .map(|a| a.output_midi_number)
+            .map(|a| {
+                a.input_midi_numbers
+                    .as_deref()
+                    .and_then(|numbers| numbers.split_whitespace().next()?.parse().ok())
+                    .unwrap_or(a.output_midi_number)
+            })
             .or(midi_property)
             .ok_or_else(|| GpError::Invalid(format!("note {id} has no drum sound")))?;
         Ok(GpNote {
             midi_note,
-            articulation: articulation.map(|a| a.name.clone()),
             tie_origin: note.tie.as_ref().is_some_and(|t| t.origin),
             tie_destination: note.tie.as_ref().is_some_and(|t| t.destination),
         })

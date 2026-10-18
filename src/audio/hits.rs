@@ -11,7 +11,9 @@ pub struct Hit {
     /// score's own tempo
     pub seconds: f64,
     pub sound: Sound,
-    /// The General MIDI note it's written as, for MIDI out
+    /// A cymbal grabbed straight after it's hit
+    pub choke: bool,
+    /// The General MIDI note it's sent as, for MIDI out
     pub midi_note: u8,
     /// From 0 to 1
     pub velocity: f32,
@@ -29,26 +31,28 @@ pub fn score_hits(score: &Score) -> Vec<Hit> {
         let to_performance = |written: u32| played.timestamp + written - played.written_timestamp;
 
         for note in measure.notes.iter().filter(|note| !note.tied) {
-            if let Some(piece) = note.drum_piece() {
+            if let Some(voice) = note.drum_voice() {
                 hits.push(Hit {
                     seconds: tempo_map.ticks_to_seconds(to_performance(note.timestamp)),
-                    sound: Sound::new(piece, note.articulation),
-                    midi_note: note.midi_note,
+                    sound: Sound::new(voice),
+                    choke: voice.is_choke(),
+                    midi_note: voice.gm_note(),
                     velocity: 1.0,
                 });
             }
         }
 
         for grace_note in &measure.grace_notes {
-            if let Some(piece) = grace_note.drum_piece() {
+            if let Some(voice) = grace_note.drum_voice() {
                 // A grace note can fall just before its measure, so place it
                 // relative to its main note
                 let lead = grace_note.main_timestamp - grace_note.timestamp;
                 let timestamp = to_performance(grace_note.main_timestamp).saturating_sub(lead);
                 hits.push(Hit {
                     seconds: tempo_map.ticks_to_seconds(timestamp),
-                    sound: Sound::new(piece, grace_note.articulation),
-                    midi_note: grace_note.midi_note,
+                    sound: Sound::new(voice),
+                    choke: voice.is_choke(),
+                    midi_note: voice.gm_note(),
                     velocity: GRACE_NOTE_VELOCITY,
                 });
             }

@@ -88,13 +88,13 @@ pub fn Measure(
                     .notes
                     .iter()
                     .filter_map(|note| {
-                        let drum_piece = note.drum_piece()?;
+                        let voice = note.drum_voice()?;
                         Some(rsx! {
                             Note {
                                 value: note.duration.value,
-                                drum_piece,
-                                articulation: note.articulation,
-                                position: scale.get_position(note.timestamp, drum_piece),
+                                voice,
+                                gp_note: note.midi_note,
+                                position: scale.get_position(note.timestamp, voice.piece()),
                                 scale: scale.clone(),
                             }
                         })
@@ -271,7 +271,7 @@ fn Stems(scale: MeasureScale, group: BeamGroup, stem_bounds: (f32, f32)) -> Elem
             }
         });
 
-    // Hi-hat open and close signs, just beyond the stem end
+    // Hi-hat open and close signs and cymbal chokes, just beyond the stem end
     let annotation_radius = ANNOTATION_RADIUS * unit;
     let annotations = group.chords.iter().filter_map(|chord| {
         let annotation = chord.annotation?;
@@ -301,6 +301,24 @@ fn Stems(scale: MeasureScale, group: BeamGroup, stem_bounds: (f32, f32)) -> Elem
                         stroke: "black",
                         stroke_width: 1.3,
                     }
+                }
+            },
+            Annotation::Choke => rsx! {
+                // An apostrophe: a dot with a short tail
+                circle {
+                    cx: x,
+                    cy: y - 0.35 * r,
+                    r: 0.5 * r,
+                    fill: "black",
+                }
+                line {
+                    x1: x + 0.4 * r,
+                    y1: y - 0.2 * r,
+                    x2: x - 0.2 * r,
+                    y2: y + r,
+                    stroke: "black",
+                    stroke_width: 1.3,
+                    stroke_linecap: "round",
                 }
             },
             Annotation::Closed => rsx! {

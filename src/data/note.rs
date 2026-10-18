@@ -1,4 +1,4 @@
-use super::drum_piece::DrumPiece;
+use super::{drum_piece::DrumPiece, drum_voice::DrumVoice};
 
 /// Number of ticks in a quarter note. Divisible by 2, 3, 5 and their powers
 /// up to 64th notes, so dotted notes and common tuplets land on whole ticks
@@ -73,43 +73,6 @@ impl Duration {
     }
 }
 
-/// How a note is played, where that changes how it is drawn
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Articulation {
-    Normal,
-    HihatClosed,
-    HihatHalfOpen,
-    HihatOpen,
-    RideBell,
-}
-
-impl Articulation {
-    /// Work out the articulation from the General MIDI note, and Guitar Pro's
-    /// name for the sound when there is one, e.g. "Hi-Hat (open)"
-    pub fn new(midi_note: u8, name: Option<&str>) -> Self {
-        let name = name.map(str::to_lowercase).unwrap_or_default();
-        if name.contains("bell") || (name.is_empty() && midi_note == 53) {
-            Articulation::RideBell
-        } else if name.contains("hi-hat") && name.contains("half") {
-            Articulation::HihatHalfOpen
-        } else if (name.contains("hi-hat") && name.contains("open"))
-            || (name.is_empty() && midi_note == 46)
-        {
-            Articulation::HihatOpen
-        } else if (name.contains("hi-hat") && name.contains("closed"))
-            || (name.is_empty() && midi_note == 42)
-        {
-            Articulation::HihatClosed
-        } else {
-            Articulation::Normal
-        }
-    }
-
-    pub fn is_open_hihat(self) -> bool {
-        matches!(self, Articulation::HihatOpen | Articulation::HihatHalfOpen)
-    }
-}
-
 /// A sign drawn over a note
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Annotation {
@@ -119,6 +82,8 @@ pub enum Annotation {
     HalfOpen,
     /// "+": the hi-hat closes again after being open
     Closed,
+    /// An apostrophe: the cymbal is grabbed straight after it's hit
+    Choke,
 }
 
 #[derive(Clone, PartialEq, Debug)]
@@ -132,8 +97,8 @@ pub struct Rest {
 #[derive(Clone, PartialEq, Debug)]
 pub struct Note {
     pub duration: Duration,
-    /// The General MIDI percussion note number, kept so the exact
-    /// articulation (e.g. open vs closed hi-hat) is not lost
+    /// Guitar Pro's number for the sound, e.g. 91 for a rim shot. See
+    /// `DrumVoice::from_gp_note`
     pub midi_note: u8,
     /// Where the note is within the score, measured in ticks since the beginning
     pub timestamp: u32,
@@ -142,7 +107,6 @@ pub struct Note {
     /// Which voice the note is in. Voice 0 is drawn with stems up, the others
     /// (usually the feet) with stems down
     pub voice: u8,
-    pub articulation: Articulation,
     pub annotation: Option<Annotation>,
 }
 
@@ -154,6 +118,7 @@ pub const GRACE_NOTE_LEAD: u32 = TICKS_PER_QUARTER / 16;
 /// e.g. the soft stroke of a flam or the two of a drag
 #[derive(Clone, PartialEq, Debug)]
 pub struct GraceNote {
+    /// Guitar Pro's number for the sound, as for `Note::midi_note`
     pub midi_note: u8,
     /// When the grace note is played, in ticks since the beginning. Slightly
     /// before `main_timestamp`
@@ -164,19 +129,23 @@ pub struct GraceNote {
     /// note: 1 for the one right before it
     pub steps_before_main: u8,
     pub voice: u8,
-    pub articulation: Articulation,
 }
 
 impl GraceNote {
-    pub fn drum_piece(&self) -> Option<DrumPiece> {
-        DrumPiece::from_gm_note(self.midi_note)
+    pub fn drum_voice(&self) -> Option<DrumVoice> {
+        DrumVoice::from_gp_note(self.midi_note)
     }
 }
 
 impl Note {
-    /// The physical drum piece this note is played on, if the MIDI note is a known one
+    /// The sound this note is played with, if it's one of the kit's
+    pub fn drum_voice(&self) -> Option<DrumVoice> {
+        DrumVoice::from_gp_note(self.midi_note)
+    }
+
+    /// The physical drum piece this note is played on, if it's one of the kit's
     pub fn drum_piece(&self) -> Option<DrumPiece> {
-        DrumPiece::from_gm_note(self.midi_note)
+        self.drum_voice().map(DrumVoice::piece)
     }
 }
 

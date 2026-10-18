@@ -199,7 +199,7 @@ mod tests {
     use super::*;
     use crate::data::{
         measure::Fill,
-        note::{Articulation, Duration, Note, NoteValue},
+        note::{Duration, Note, NoteValue},
         time_signature::TimeSignature,
     };
 
@@ -214,7 +214,6 @@ mod tests {
                     timestamp: n * 480,
                     tied: false,
                     voice: 0,
-                    articulation: Articulation::Normal,
                     annotation: None,
                 })
                 .collect(),

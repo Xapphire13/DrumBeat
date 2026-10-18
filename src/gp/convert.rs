@@ -2,10 +2,11 @@
 
 use crate::data::{
     drum_piece::DrumPiece,
+    drum_voice::DrumVoice,
     measure::{Fill, Measure},
     note::{
-        Annotation, Articulation, Duration, GRACE_NOTE_LEAD, GraceNote, Note, NoteValue, Rest,
-        TICKS_PER_QUARTER, Tuplet as DataTuplet,
+        Annotation, Duration, GRACE_NOTE_LEAD, GraceNote, Note, NoteValue, Rest, TICKS_PER_QUARTER,
+        Tuplet as DataTuplet,
     },
     score::{Hairpin as DataHairpin, HairpinKind, Score},
     tempo::{TempoChange as DataTempoChange, TempoMap},
@@ -48,10 +49,6 @@ impl GpScore {
                         timestamp,
                         tied: note.tie_destination,
                         voice: index,
-                        articulation: Articulation::new(
-                            note.midi_note,
-                            note.articulation.as_deref(),
-                        ),
                         annotation: None,
                     }));
                 }
@@ -72,6 +69,7 @@ impl GpScore {
             measures.push(measure);
         }
         annotate_hihats(&mut measures);
+        annotate_chokes(&mut measures);
         let hairpins = self.hairpins(&measures);
 
         let mut tempo_map = TempoMap::new(DEFAULT_BPM);
@@ -143,7 +141,6 @@ fn convert_grace_notes(voice: &GpVoice, index: u8, bar_timestamp: u32) -> Vec<Gr
                 main_timestamp,
                 steps_before_main,
                 voice: index,
-                articulation: Articulation::new(note.midi_note, note.articulation.as_deref()),
             }));
         }
     }
@@ -201,14 +198,24 @@ fn annotate_hihats(measures: &mut [Measure]) {
 
     let mut is_open = false;
     for note in hihats {
-        let is_pedal = note.drum_piece() == Some(DrumPiece::HihatPedal);
-        note.annotation = match note.articulation {
-            Articulation::HihatOpen => Some(Annotation::Open),
-            Articulation::HihatHalfOpen => Some(Annotation::HalfOpen),
-            _ if is_open && !is_pedal => Some(Annotation::Closed),
+        let voice = note.drum_voice();
+        note.annotation = match voice {
+            Some(DrumVoice::HihatOpen) => Some(Annotation::Open),
+            Some(DrumVoice::HihatHalfOpen) => Some(Annotation::HalfOpen),
+            Some(DrumVoice::HihatPedal) => None,
+            _ if is_open => Some(Annotation::Closed),
             _ => None,
         };
-        is_open = note.articulation.is_open_hihat();
+        is_open = voice.is_some_and(DrumVoice::is_open_hihat);
+    }
+}
+
+/// Mark cymbals that are grabbed straight after they're hit
+fn annotate_chokes(measures: &mut [Measure]) {
+    for note in measures.iter_mut().flat_map(|measure| &mut measure.notes) {
+        if note.drum_voice().is_some_and(DrumVoice::is_choke) {
+            note.annotation = Some(Annotation::Choke);
+        }
     }
 }
 
@@ -295,26 +302,25 @@ mod tests {
 
     #[test]
     fn marks_hihat_opening_and_closing() {
-        let hihat = |timestamp, midi_note, name| Note {
+        let hihat = |timestamp, midi_note| Note {
             duration: Duration::new(NoteValue::Eighth),
             midi_note,
             timestamp,
             tied: false,
             voice: 0,
-            articulation: Articulation::new(midi_note, Some(name)),
             annotation: None,
         };
         let mut measures = vec![Measure {
             timestamp: 0,
             notes: vec![
-                hihat(0, 42, "Hi-Hat (closed)"),
-                hihat(480, 46, "Hi-Hat (open)"),
-                hihat(960, 42, "Hi-Hat (closed)"),
-                hihat(1440, 42, "Hi-Hat (closed)"),
-                hihat(1920, 46, "Hi-Hat (half)"),
+                hihat(0, 42),
+                hihat(480, 46),
+                hihat(960, 42),
+                hihat(1440, 42),
+                hihat(1920, 92),
                 // The pedal closes it, so the next closed hit needs no mark
-                hihat(2400, 44, "Pedal Hi-Hat (hit)"),
-                hihat(2880, 42, "Hi-Hat (closed)"),
+                hihat(2400, 44),
+                hihat(2880, 42),
             ],
             rests: vec![],
             grace_notes: vec![],
@@ -341,10 +347,36 @@ mod tests {
                 None,
             ]
         );
-        assert_eq!(
-            Articulation::new(53, Some("Ride (bell)")),
-            Articulation::RideBell
-        );
+    }
+
+    #[test]
+    fn marks_choked_cymbals() {
+        let note = |midi_note| Note {
+            duration: Duration::new(NoteValue::Quarter),
+            midi_note,
+            timestamp: 0,
+            tied: false,
+            voice: 0,
+            annotation: None,
+        };
+        let mut measures = vec![Measure {
+            timestamp: 0,
+            // A choked crash, then one left to ring
+            notes: vec![note(97), note(49)],
+            rests: vec![],
+            grace_notes: vec![],
+            time_signature: DataTimeSignature {
+                notes_per_measure: 4,
+                note_value: NoteValue::Quarter,
+            },
+            repeat_start: false,
+            repeat_end: None,
+            fill: Fill::Full,
+        }];
+        annotate_chokes(&mut measures);
+
+        let annotations: Vec<_> = measures[0].notes.iter().map(|n| n.annotation).collect();
+        assert_eq!(annotations, vec![Some(Annotation::Choke), None]);
     }
 
     #[test]
@@ -355,7 +387,6 @@ mod tests {
             timestamp,
             tied: false,
             voice: 0,
-            articulation: Articulation::Normal,
             annotation: None,
         };
         let grace = |main_timestamp, steps_before_main| GraceNote {
@@ -364,7 +395,6 @@ mod tests {
             main_timestamp,
             steps_before_main,
             voice: 0,
-            articulation: Articulation::Normal,
         };
         // A flam on a quarter, and a drag on a 32nd after a sixteenth
         let notes = [note(0), note(960), note(1920), note(2040)];

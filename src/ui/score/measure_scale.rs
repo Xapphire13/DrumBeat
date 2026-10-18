@@ -200,17 +200,21 @@ impl MeasureScale {
         }
     }
 
-    /// The staff line a drum piece's note head is drawn on
+    /// The staff line a drum piece's note head is drawn on: 0 is the bottom
+    /// space, and each half step is the next line or space up
     pub fn get_line_number(drum_piece: DrumPiece) -> f32 {
         match drum_piece {
             DrumPiece::HihatPedal => -1.0,
+            DrumPiece::Kick2 => -0.5,
             DrumPiece::Kick => 0.0,
-            DrumPiece::FloorTom => 1.0,
+            DrumPiece::HighFloorTom | DrumPiece::LowFloorTom => 0.5,
+            DrumPiece::VeryLowTom => 1.0,
+            DrumPiece::LowTom => 1.5,
             DrumPiece::Snare => 2.0,
-            DrumPiece::Tom2 => 2.5,
-            DrumPiece::Tom1 => 3.0,
+            DrumPiece::MidTom => 2.5,
+            DrumPiece::HighTom => 3.0,
             DrumPiece::Ride => 3.5,
-            DrumPiece::Hihat => 4.0,
+            DrumPiece::Hihat | DrumPiece::Cowbell => 4.0,
             DrumPiece::Crash => 4.5,
             DrumPiece::Splash => 5.0,
             DrumPiece::China => 5.5,
@@ -281,7 +285,7 @@ mod tests {
     use super::*;
     use crate::data::measure::Fill;
     use crate::data::{
-        note::{Articulation, Duration, Note, NoteValue},
+        note::{Duration, Note, NoteValue},
         time_signature::TimeSignature,
     };
 
@@ -296,7 +300,6 @@ mod tests {
                     timestamp: timestamp + onset,
                     tied: false,
                     voice: 0,
-                    articulation: Articulation::Normal,
                     annotation: None,
                 })
                 .collect(),
@@ -367,7 +370,6 @@ mod tests {
                 main_timestamp,
                 steps_before_main: 1,
                 voice: 0,
-                articulation: Articulation::Normal,
             })
             .collect();
         assert!(natural_width(&flams, 15.0) > natural_width(&plain, 15.0));

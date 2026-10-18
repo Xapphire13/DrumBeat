@@ -105,7 +105,10 @@ pub struct Articulations {
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "PascalCase")]
 pub struct Articulation {
-    pub name: String,
+    /// Guitar Pro's own numbers for the sound, e.g. "91" for a rim shot,
+    /// which tell sounds apart that share an output number
+    pub input_midi_numbers: Option<String>,
+    /// The General MIDI note Guitar Pro plays the sound on
     pub output_midi_number: u8,
 }
 

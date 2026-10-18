@@ -175,15 +175,12 @@ fn resolves_drum_sounds_and_ties() {
     let note = |beat: usize| &beats[beat].notes[0];
 
     assert_eq!(note(0).midi_note, 38);
-    assert_eq!(note(0).articulation.as_deref(), Some("Snare (hit)"));
-    // A rim shot plays the snare sound, so it maps to the snare's GM number
-    assert_eq!(note(2).midi_note, 38);
-    assert_eq!(note(2).articulation.as_deref(), Some("Snare (rim shot)"));
+    // Guitar Pro's own number, not the snare it's played on
+    assert_eq!(note(2).midi_note, 91);
     assert_eq!(note(3).midi_note, 36);
     assert!(note(3).tie_origin && !note(3).tie_destination);
     // No articulation: falls back to the note's own MIDI number
     assert_eq!(note(4).midi_note, 42);
-    assert_eq!(note(4).articulation, None);
 
     let tied = &score.bars[1].voices[0].beats[0].notes[0];
     assert_eq!(tied.midi_note, 36);

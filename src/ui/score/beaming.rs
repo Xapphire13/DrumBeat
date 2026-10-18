@@ -1,7 +1,8 @@
 use crate::data::{
     drum_piece::DrumPiece,
+    drum_voice::NoteHead,
     measure::Measure,
-    note::{Annotation, Articulation, Note, NoteValue, TICKS_PER_QUARTER, Tuplet},
+    note::{Annotation, Note, NoteValue, TICKS_PER_QUARTER, Tuplet},
 };
 
 use super::measure_scale::MeasureScale;
@@ -426,10 +427,10 @@ fn alternating_beats(measure: &Measure, beat: u32) -> Vec<(u8, u32, u32)> {
     spans
 }
 
-/// Whether the note's head is an X, whose stem starts from a corner. The ride
-/// bell is a cymbal, but drawn as a diamond
-fn has_x_head(note: &Note, drum_piece: DrumPiece) -> bool {
-    drum_piece.is_cymbal() && note.articulation != Articulation::RideBell
+/// Whether the note's head is an X, whose stem starts from a corner
+fn has_x_head(note: &Note) -> bool {
+    note.drum_voice()
+        .is_some_and(|voice| voice.head() == NoteHead::X)
 }
 
 /// The notes of one voice that are drawn, grouped by start time
@@ -443,7 +444,7 @@ fn chords(mut notes: Vec<(&Note, DrumPiece)>) -> Vec<Chord> {
         match chords.last_mut() {
             Some(chord) if chord.timestamp == note.timestamp => {
                 chord.lines.push(line);
-                chord.cymbals.push(has_x_head(note, drum_piece));
+                chord.cymbals.push(has_x_head(note));
                 chord.annotation = chord.annotation.or(note.annotation);
                 if ticks < chord.ticks {
                     chord.ticks = ticks;
@@ -456,7 +457,7 @@ fn chords(mut notes: Vec<(&Note, DrumPiece)>) -> Vec<Chord> {
                 value: note.duration.value,
                 ticks,
                 lines: vec![line],
-                cymbals: vec![has_x_head(note, drum_piece)],
+                cymbals: vec![has_x_head(note)],
                 tuplet: note.duration.tuplet,
                 tuplet_group: None,
                 annotation: note.annotation,
@@ -510,7 +511,7 @@ mod tests {
     use super::*;
     use crate::data::measure::Fill;
     use crate::data::{
-        note::{Articulation, Duration, Note},
+        note::{Duration, Note},
         time_signature::TimeSignature,
     };
 
@@ -525,7 +526,6 @@ mod tests {
             timestamp,
             tied: false,
             voice,
-            articulation: Articulation::Normal,
             annotation: None,
         }
     }
