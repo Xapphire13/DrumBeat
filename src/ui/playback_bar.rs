@@ -186,23 +186,28 @@ pub fn PlaybackBar() -> Element {
                                 Volume2 { size: 18 }
                             }
                         }
-                        input {
-                            r#type: "range",
-                            title: "Volume",
-                            style: "--fill: {volume_percent}%",
-                            min: 0,
-                            max: 100,
-                            step: 1,
-                            value: volume_percent,
-                            oninput: handle_volume_input,
+                        label { class: "labelled-slider volume-slider",
+                            span { class: "slider-labels",
+                                span { class: "control-label", "Volume" }
+                                span { "{volume_percent}%" }
+                            }
+                            input {
+                                r#type: "range",
+                                style: "--fill: {volume_percent}%",
+                                min: 0,
+                                max: 100,
+                                step: 1,
+                                value: volume_percent,
+                                oninput: handle_volume_input,
+                            }
                         }
                     }
 
                     div {
                         class: "tempo-control",
                         title: "Playback speed, relative to the score's tempo",
-                        label { class: "tempo-slider",
-                            span { class: "tempo-slider-labels",
+                        label { class: "labelled-slider tempo-slider",
+                            span { class: "slider-labels",
                                 span { class: "control-label", "Tempo" }
                                 span { "{SLIDER_MIN_PERCENT}–{SLIDER_MAX_PERCENT}%" }
                             }

@@ -307,24 +307,34 @@ body {
 
 .volume-control {
     display: flex;
-    align-items: center;
-    gap: 6px;
+    align-items: flex-end;
+    gap: 8px;
 }
 
+/* Centred on the slider's track rather than on its labels */
 .playback-bar .mute-button {
-    width: 34px;
-    height: 34px;
+    width: 28px;
+    height: 28px;
+    margin-bottom: -11px;
     border-radius: 8px;
 }
 
-.volume-control input {
-    width: 80px;
+.volume-slider input {
+    width: 110px;
 }
 
-/* Short of room, volume is just the mute button */
+/* Short of room, volume is just the mute button, centred in the bar */
 @container (max-width: 1019.9px) {
-    .volume-control input {
+    .volume-slider {
         display: none;
+    }
+
+    .volume-control {
+        align-items: center;
+    }
+
+    .playback-bar .mute-button {
+        margin-bottom: 0;
     }
 }
 
@@ -335,13 +345,13 @@ body {
     gap: 12px;
 }
 
-.tempo-slider {
+.labelled-slider {
     display: flex;
     flex-direction: column;
     gap: 6px;
 }
 
-.tempo-slider-labels {
+.slider-labels {
     display: flex;
     justify-content: space-between;
     font-family: var(--mono);
@@ -353,8 +363,7 @@ body {
     width: 180px;
 }
 
-.tempo-slider input,
-.volume-control input {
+.labelled-slider input {
     -webkit-appearance: none;
     appearance: none;
     height: 6px;
@@ -368,8 +377,7 @@ body {
     outline: none;
 }
 
-.tempo-slider input::-webkit-slider-thumb,
-.volume-control input::-webkit-slider-thumb {
+.labelled-slider input::-webkit-slider-thumb {
     -webkit-appearance: none;
     width: 16px;
     height: 16px;
