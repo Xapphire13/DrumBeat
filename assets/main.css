@@ -103,6 +103,7 @@ body {
 .staff-container {
     position: relative;
     flex-shrink: 0;
+    user-select: none;
     background: white;
     color: black;
     display: flex;
@@ -131,6 +132,52 @@ body {
     fill: black;
     font-style: italic;
     font-weight: 600;
+}
+
+/* The loop being practised: a tint over the notes it covers, edged where it
+   starts and ends */
+.staff .loop-tint {
+    fill: rgba(139, 108, 255, 0.12);
+    stroke: none;
+}
+
+.staff .loop-edge {
+    stroke: var(--accent);
+}
+
+/* Tabs for dragging the loop's ends, shown while the pointer is over the
+   score */
+.loop-tab {
+    position: absolute;
+    top: 0;
+    z-index: 1;
+    height: 18px;
+    padding: 0 6px;
+    border: none;
+    background: var(--accent);
+    color: #ffffff;
+    font: 600 11px/18px var(--mono);
+    white-space: nowrap;
+    cursor: ew-resize;
+}
+
+.loop-tab-start {
+    border-radius: 0 4px 4px 0;
+}
+
+.loop-tab-end {
+    transform: translateX(-100%);
+    border-radius: 4px 0 0 4px;
+}
+
+/* The tab follows the pointer while it's dragged, so it mustn't get in the
+   way of finding the note underneath */
+.staves.dragging .loop-tab {
+    pointer-events: none;
+}
+
+.staves.dragging {
+    cursor: ew-resize;
 }
 
 .staff .invalid-measure {
@@ -212,7 +259,35 @@ body {
     color: #8a8f9c;
 }
 
+/* Each segment can be clicked to go to its measure, or dragged across to
+   loop measures */
+.measure-slot {
+    position: relative;
+    display: flex;
+    flex: 1 1 0;
+    min-width: 1px;
+    cursor: pointer;
+}
+
+/* A taller target than the thin segment */
+.measure-slot::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: -6px;
+    bottom: -4px;
+}
+
+.loop-band {
+    position: absolute;
+    top: -4px;
+    bottom: -4px;
+    background: rgba(139, 108, 255, 0.2);
+}
+
 .measure-segment {
+    position: relative;
     flex: 1 1 0;
     min-width: 1px;
     height: 6px;
@@ -323,6 +398,38 @@ body {
 
 .repeat-pass-short {
     display: none;
+}
+
+.loop-chip {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 28px;
+    padding: 0 3px 0 10px;
+    border-radius: 999px;
+    background: var(--accent);
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.loop-chip-length {
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.72);
+}
+
+.playback-bar .loop-clear {
+    width: 22px;
+    height: 22px;
+    padding: 0;
+    border-radius: 50%;
+    background: rgba(15, 17, 22, 0.22);
+    color: #ffffff;
+}
+
+.playback-bar .loop-clear:hover:not(:disabled) {
+    background: rgba(15, 17, 22, 0.4);
 }
 
 /* Short of room, the pass chip drops its words */

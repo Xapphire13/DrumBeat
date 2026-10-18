@@ -49,56 +49,54 @@ pub fn use_phantom_playhead_data(
     let phantom_playhead = use_memo(use_reactive(
         (mouse_position, scales, measures),
         |(mouse_position, scales, measures)| {
-            if let Some(Position { x, .. }) = mouse_position {
-                // Snap to every note on this staff, and to the start of each
-                // measure so empty measures and ones opening with a rest can
-                // be clicked too
-                let mut snap_timestamps = vec![];
-                for measure in &measures {
-                    snap_timestamps.push(measure.timestamp);
-                    for note in &measure.notes {
-                        snap_timestamps.push(note.timestamp);
-                    }
-                }
-
-                if snap_timestamps.is_empty() {
-                    return None;
-                }
-
-                // Convert mouse x position to estimated timestamp. In the
-                // margins, use the nearest end of the staff
-                let mouse_timestamp = scales
-                    .iter()
-                    .find(|scale| x >= scale.outer_x_bounds.0 && x <= scale.outer_x_bounds.1)
-                    .or_else(|| {
-                        let first = scales.first()?;
-                        if x < first.outer_x_bounds.0 {
-                            Some(first)
-                        } else {
-                            scales.last()
-                        }
-                    })
-                    .map_or(0, |scale| scale.get_timestamp(x));
-
-                // Find the closest snap point
-                if let Some(&closest_timestamp) = snap_timestamps
-                    .iter()
-                    .min_by_key(|&&ts| (i64::from(ts) - i64::from(mouse_timestamp)).abs())
-                {
-                    // Find which scale contains this timestamp and get x position
-                    return scales
-                        .iter()
-                        .zip(&measures)
-                        .find(|(_, measure)| measure.contains_timestamp(closest_timestamp))
-                        .map(|(scale, _)| PhantomPlayheadData {
-                            closest_timestamp,
-                            x_pos: scale.get_x(closest_timestamp),
-                        });
-                }
-            }
-            None
+            mouse_position.and_then(|Position { x, .. }| closest_snap(x, &scales, &measures))
         },
     ));
 
     phantom_playhead()
+}
+
+/// The place on the staff nearest `x` that the playhead snaps to: every note
+/// on the staff, and the start of each measure so empty measures and ones
+/// opening with a rest can be clicked too
+pub fn closest_snap(
+    x: f32,
+    scales: &[MeasureScale],
+    measures: &[Measure],
+) -> Option<PhantomPlayheadData> {
+    let mut snap_timestamps = vec![];
+    for measure in measures {
+        snap_timestamps.push(measure.timestamp);
+        for note in &measure.notes {
+            snap_timestamps.push(note.timestamp);
+        }
+    }
+
+    // Convert mouse x position to estimated timestamp. In the margins, use
+    // the nearest end of the staff
+    let mouse_timestamp = scales
+        .iter()
+        .find(|scale| x >= scale.outer_x_bounds.0 && x <= scale.outer_x_bounds.1)
+        .or_else(|| {
+            let first = scales.first()?;
+            if x < first.outer_x_bounds.0 {
+                Some(first)
+            } else {
+                scales.last()
+            }
+        })
+        .map_or(0, |scale| scale.get_timestamp(x));
+
+    // Find the closest snap point, and where it's drawn
+    let &closest_timestamp = snap_timestamps
+        .iter()
+        .min_by_key(|&&ts| (i64::from(ts) - i64::from(mouse_timestamp)).abs())?;
+    scales
+        .iter()
+        .zip(measures)
+        .find(|(_, measure)| measure.contains_timestamp(closest_timestamp))
+        .map(|(scale, _)| PhantomPlayheadData {
+            closest_timestamp,
+            x_pos: scale.get_x(closest_timestamp),
+        })
 }

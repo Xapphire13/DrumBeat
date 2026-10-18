@@ -139,6 +139,27 @@ impl Performance {
         timestamps
     }
 
+    /// Sorted, unique performance timestamps the score can be snapped to:
+    /// the start of every played measure and every note in it, as the
+    /// score's playhead snaps when clicked
+    pub fn snap_points(&self, measures: &[Measure]) -> Vec<u32> {
+        let mut timestamps: Vec<u32> = self
+            .measures
+            .iter()
+            .flat_map(|played| {
+                let notes = measures[played.measure_index]
+                    .notes
+                    .iter()
+                    .map(move |note| played.timestamp + note.timestamp - played.written_timestamp);
+                std::iter::once(played.timestamp).chain(notes)
+            })
+            .collect();
+
+        timestamps.sort_unstable();
+        timestamps.dedup();
+        timestamps
+    }
+
     /// The 1-based numbers a written measure is played as, counting played
     /// measures from the start of the performance
     pub fn measure_numbers(&self, measure_index: usize) -> Vec<usize> {

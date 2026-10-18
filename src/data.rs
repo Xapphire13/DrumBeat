@@ -1,4 +1,5 @@
 pub mod drum_piece;
+pub mod loop_range;
 pub mod measure;
 pub mod note;
 pub mod performance;

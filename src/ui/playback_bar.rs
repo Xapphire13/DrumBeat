@@ -1,14 +1,21 @@
 use std::cmp::Ordering;
 
-use dioxus::prelude::*;
+use dioxus::{html::input_data::MouseButton, prelude::*};
 use lucide_dioxus::{
-    ChevronLeft, ChevronRight, ChevronUp, Gauge, Pause, Play, Repeat, RotateCcw, SkipBack,
-    SkipForward, Volume1, Volume2, VolumeX,
+    ChevronLeft, ChevronRight, ChevronUp, Gauge, Infinity, Pause, Play, Repeat, RotateCcw,
+    SkipBack, SkipForward, Volume1, Volume2, VolumeX, X,
 };
 
 use crate::{
-    data::performance::PlayedMeasure,
-    ui::providers::{playback_manager::use_playback_manager, score_manager::use_score_manager},
+    data::{
+        loop_range::{LoopRange, count_label},
+        performance::PlayedMeasure,
+    },
+    ui::providers::{
+        loop_editor::{LoopDrag, use_loop_editor},
+        playback_manager::use_playback_manager,
+        score_manager::use_score_manager,
+    },
 };
 
 /// The range of the speed slider. Typing a BPM can go beyond it
@@ -19,7 +26,24 @@ const SLIDER_MAX_PERCENT: f64 = 200.0;
 pub fn PlaybackBar() -> Element {
     let mut playback_manager = use_playback_manager();
     let score = use_score_manager();
+    let loop_editor = use_loop_editor();
     let performance_timestamp = playback_manager.performance_timestamp();
+    // The loop as it's being dragged out, or else the one playing
+    let shown_loop = loop_editor.shown(&playback_manager, &score.read());
+    let loop_bands: Vec<Option<LoopBand>> = {
+        let performance = &score.read().performance;
+        (0..performance.measures().len())
+            .map(|index| shown_loop.and_then(|range| LoopBand::new(range, performance, index)))
+            .collect()
+    };
+    let loop_chip = shown_loop.map(|range| {
+        let score = score.read();
+        let label = |timestamp| count_label(timestamp, &score.performance, &score.measures);
+        (
+            format!("Loop {} – {}", label(range.start), label(range.last)),
+            format_beats(range.beats(&score.performance, &score.measures)),
+        )
+    });
     // Measures are counted as they're played, with repeats expanded
     let (played_index, number_of_measures, (pass, passes), segments) = {
         let performance = &score.read().performance;
@@ -109,7 +133,11 @@ pub fn PlaybackBar() -> Element {
     let tempo_chip_class = format!(
         "tempo-chip{}{}",
         if tempo_open() { " open" } else { "" },
-        if speed_percent == 100.0 { "" } else { " off-tempo" },
+        if speed_percent == 100.0 {
+            ""
+        } else {
+            " off-tempo"
+        },
     );
 
     let is_muted = playback_manager.is_muted();
@@ -136,13 +164,21 @@ pub fn PlaybackBar() -> Element {
                         span {
                             class,
                             style: "flex: {group.segments.len()} 1 0",
-                            for &class in &group.segments {
-                                span { class }
+                            for (offset , & class) in group.segments.iter().enumerate() {
+                                StripSegment {
+                                    index: group.first_index + offset,
+                                    class,
+                                    band: loop_bands[group.first_index + offset],
+                                }
                             }
                         }
                     } else {
-                        for class in group.segments {
-                            span { class }
+                        for (offset , & class) in group.segments.iter().enumerate() {
+                            StripSegment {
+                                index: group.first_index + offset,
+                                class,
+                                band: loop_bands[group.first_index + offset],
+                            }
                         }
                     }
                 }
@@ -171,6 +207,20 @@ pub fn PlaybackBar() -> Element {
                             Repeat { size: 13 }
                             span { class: "repeat-pass-long", "Pass {pass} of {passes}" }
                             span { class: "repeat-pass-short", "{pass}/{passes}" }
+                        }
+                    }
+                    if let Some((label, length)) = loop_chip {
+                        span { class: "loop-chip",
+                            Infinity { size: 15 }
+                            "{label}"
+                            span { class: "loop-chip-length", "{length}" }
+                            button {
+                                class: "loop-clear",
+                                title: "Stop looping (Esc)",
+                                aria_label: "Stop looping",
+                                onclick: move |_| playback_manager.clear_loop(),
+                                X { size: 12 }
+                            }
                         }
                     }
                 }
@@ -326,10 +376,104 @@ fn format_time(seconds: f64) -> String {
     }
 }
 
+/// One played measure in the measure strip. Pressing on it and dragging
+/// across others loops whole measures; a click without dragging moves the
+/// playhead to the start of the measure, on the pass through a repeat that
+/// the segment stands for
+#[component]
+fn StripSegment(index: usize, class: &'static str, band: Option<LoopBand>) -> Element {
+    let mut loop_editor = use_loop_editor();
+
+    rsx! {
+        span {
+            class: "measure-slot",
+            onmousedown: move |event: MouseEvent| {
+                if event.trigger_button() == Some(MouseButton::Primary) {
+                    loop_editor.start_drag(LoopDrag::Measures {
+                        anchor: index,
+                        current: index,
+                        moved: false,
+                    });
+                }
+            },
+            onmouseenter: move |_| loop_editor.drag_to_measure(index),
+            if let Some(band) = band {
+                span { class: "loop-band", style: band.style() }
+            }
+            span { class }
+        }
+    }
+}
+
+/// The part of a measure strip segment the loop covers
+#[derive(Clone, Copy, PartialEq, Debug)]
+struct LoopBand {
+    /// From the start of the segment, as fractions of it
+    from: f64,
+    to: f64,
+    /// Whether the loop starts or ends in this measure, so the band's end is
+    /// rounded off there instead of running on into the next segment
+    starts: bool,
+    ends: bool,
+}
+
+impl LoopBand {
+    fn new(
+        range: LoopRange,
+        performance: &crate::data::performance::Performance,
+        index: usize,
+    ) -> Option<Self> {
+        let (from, to) = range.measure_coverage(performance, index)?;
+        let played = performance.measures()[index];
+        Some(Self {
+            from,
+            to,
+            starts: range.start >= played.timestamp,
+            ends: range.end <= played.timestamp + played.length,
+        })
+    }
+
+    fn style(self) -> String {
+        let radius = |rounded: bool| if rounded { "3px" } else { "0" };
+        let (start, end) = (radius(self.starts), radius(self.ends));
+        // Bridge the gap to the next segment while the loop carries on
+        let bridge = if self.ends { 0 } else { 2 };
+        format!(
+            "left: {}%; width: calc({}% + {bridge}px); border-radius: {start} {end} {end} {start}",
+            self.from * 100.0,
+            (self.to - self.from) * 100.0,
+        )
+    }
+}
+
+/// A loop's length, e.g. "15 beats", "½ beat" or "3¼ beats"
+fn format_beats(beats: f64) -> String {
+    let whole = beats.floor();
+    let fraction = match ((beats - whole) * 12.0).round() as u32 {
+        0 => "",
+        3 => "¼",
+        4 => "⅓",
+        6 => "½",
+        8 => "⅔",
+        9 => "¾",
+        12 => return format_beats(whole + 1.0),
+        _ => return format!("{beats:.1} beats"),
+    };
+    let number = if whole == 0.0 && !fraction.is_empty() {
+        fraction.to_string()
+    } else {
+        format!("{whole}{fraction}")
+    };
+    let unit = if beats <= 1.0 { "beat" } else { "beats" };
+    format!("{number} {unit}")
+}
+
 /// A run of segments in the measure strip. Each pass through a repeat is
 /// its own group, drawn with a bracket above it
 #[derive(Debug, PartialEq)]
 struct StripGroup {
+    /// Index into the played measures of the group's first segment
+    first_index: usize,
     /// The bracket's class, for a pass through a repeat
     pass_class: Option<&'static str>,
     /// The class of each played measure's segment
@@ -372,6 +516,7 @@ fn measure_segments(measures: &[PlayedMeasure], played_index: usize) -> Vec<Stri
     groups
         .into_iter()
         .map(|(in_pass, indices)| {
+            let first_index = indices[0];
             let pass_class = in_pass.then(|| {
                 let (first, last) = (indices[0], indices[indices.len() - 1]);
                 if last < played_index {
@@ -391,6 +536,7 @@ fn measure_segments(measures: &[PlayedMeasure], played_index: usize) -> Vec<Stri
                 })
                 .collect();
             StripGroup {
+                first_index,
                 pass_class,
                 segments,
             }
@@ -424,6 +570,17 @@ mod tests {
     }
 
     #[test]
+    fn formats_loop_lengths() {
+        assert_eq!(format_beats(15.0), "15 beats");
+        assert_eq!(format_beats(1.0), "1 beat");
+        assert_eq!(format_beats(0.5), "½ beat");
+        assert_eq!(format_beats(14.5), "14½ beats");
+        assert_eq!(format_beats(3.25), "3¼ beats");
+        assert_eq!(format_beats(2.0 / 3.0), "⅔ beat");
+        assert_eq!(format_beats(1.2), "1.2 beats");
+    }
+
+    #[test]
     fn brackets_each_pass_of_a_repeat() {
         // Measure 0, then 1–2 played three times, then 3
         let measures = played(&[0, 1, 2, 1, 2, 1, 2, 3]);
@@ -441,6 +598,8 @@ mod tests {
         );
         let lengths: Vec<_> = groups.iter().map(|g| g.segments.len()).collect();
         assert_eq!(lengths, [1, 2, 2, 2, 1]);
+        let first_indices: Vec<_> = groups.iter().map(|g| g.first_index).collect();
+        assert_eq!(first_indices, [0, 1, 3, 5, 7]);
         assert_eq!(
             groups[2].segments,
             ["measure-segment current", "measure-segment"]

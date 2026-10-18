@@ -1,22 +1,28 @@
 use std::{cell::Cell, rc::Rc};
 
-use dioxus::prelude::*;
+use dioxus::{html::input_data::MouseButton, prelude::*};
 
 use crate::{
     data::{
+        loop_range::count_label,
         measure::{Fill, Measure as MeasureData},
         position::Position,
         score::{Hairpin, HairpinKind},
     },
     ui::{
         hooks::{MousePositionData, use_mouse_position},
-        providers::{playback_manager::use_playback_manager, score_manager::use_score_manager},
+        providers::{
+            loop_editor::{LoopDrag, use_loop_editor},
+            playback_manager::use_playback_manager,
+            score_manager::use_score_manager,
+        },
         score::{
             StaffDimensions, StaffLayout,
             measure::Measure,
             measure_scale::MeasureScale,
             staff::{
-                phantom_playhead::{PhantomPlayhead, use_phantom_playhead_data},
+                loop_marks::{LoopGeometry, LoopMarks},
+                phantom_playhead::{PhantomPlayhead, closest_snap, use_phantom_playhead_data},
                 playhead::Playhead,
                 staff_lines::StaffLines,
             },
@@ -24,6 +30,7 @@ use crate::{
     },
 };
 
+mod loop_marks;
 mod phantom_playhead;
 mod playhead;
 mod staff_lines;
@@ -92,21 +99,90 @@ pub fn Staff(dimensions: StaffDimensions, layout: StaffLayout) -> Element {
         .map(|(first, last)| (first.timestamp, last.end_timestamp()));
     use_follow_playhead(container, span);
 
-    let handle_on_click = {
-        let phantom_playhead_data = phantom_playhead_data.clone();
-        move |_: MouseEvent| {
-            if let Some(data) = phantom_playhead_data.clone() {
-                playback_manager.update_playhead(data.closest_timestamp, &score());
+    let mut loop_editor = use_loop_editor();
+
+    // The note under the pointer, on the performance timeline, taking the
+    // pass through a repeat nearest `near`
+    let note_at = {
+        let measures = measures.clone();
+        move |event: &MouseEvent, near: u32| {
+            let x = event.coordinates().element().x as f32 / zoom;
+            let written = closest_snap(x, &scales.peek(), &measures)?.closest_timestamp;
+            score.peek().performance.to_performance(written, near)
+        }
+    };
+
+    // Pressing on a note starts a drag, which sets a loop if it moves to
+    // another note, or moves the playhead to the note if it doesn't
+    let handle_on_mouse_down = {
+        let note_at = note_at.clone();
+        move |event: MouseEvent| {
+            if event.trigger_button() != Some(MouseButton::Primary) {
+                return;
             }
+            let playhead = playback_manager.performance_timestamp();
+            if let Some(anchor) = note_at(&event, playhead) {
+                loop_editor.start_drag(LoopDrag::Notes {
+                    anchor,
+                    current: anchor,
+                    moved: false,
+                });
+            }
+        }
+    };
+
+    let handle_on_mouse_move = move |event: MouseEvent| {
+        handle_on_mouse_move.call(event.clone());
+        let Some(LoopDrag::Notes { anchor, .. }) = loop_editor.drag() else {
+            return;
+        };
+        // Released outside the window
+        if event.held_buttons().is_empty() {
+            loop_editor.finish(&mut playback_manager, &score.peek());
+        } else if let Some(timestamp) = note_at(&event, anchor) {
+            loop_editor.drag_to_note(timestamp);
+        }
+    };
+
+    let shown_loop = loop_editor.shown(&playback_manager, &score.read());
+    let loop_geometry = shown_loop
+        .map(|range| LoopGeometry::new(range, &score.read().performance, &measures, &scales()));
+    // The tabs for dragging the loop's ends stay out of the way unless the
+    // pointer is over the score
+    let show_tabs = loop_editor.is_hovering_score() || loop_editor.is_dragging();
+    let loop_tabs = shown_loop
+        .zip(loop_geometry.clone())
+        .filter(|_| show_tabs)
+        .map(|(range, geometry)| {
+            let score = score.read();
+            let label = |timestamp| count_label(timestamp, &score.performance, &score.measures);
+            (
+                geometry
+                    .start_x
+                    .map(|x| (x * zoom, label(range.start), range.last, range.start)),
+                geometry
+                    .end_x
+                    .map(|x| (x * zoom, label(range.last), range.start, range.last)),
+            )
+        });
+    // Grabbing a tab drags that end of the loop, keeping the other in place
+    let grab_tab = move |anchor: u32, current: u32| {
+        move |event: MouseEvent| {
+            event.stop_propagation();
+            loop_editor.start_drag(LoopDrag::Notes {
+                anchor,
+                current,
+                moved: true,
+            });
         }
     };
 
     rsx! {
         div {
             class: "staff-container",
+            onmousedown: handle_on_mouse_down,
             onmousemove: handle_on_mouse_move,
             onmouseleave: handle_on_mouse_leave,
-            onclick: handle_on_click,
             onmounted: move |event: MountedEvent| container.set(Some(event.data())),
             style: "height: {height * zoom}px",
 
@@ -119,6 +195,10 @@ pub fn Staff(dimensions: StaffDimensions, layout: StaffLayout) -> Element {
                     if measure.fill != Fill::Full {
                         InvalidMeasure { scale, fill: measure.fill, repeat_end: measure.repeat_end }
                     }
+                }
+
+                if let Some(geometry) = loop_geometry {
+                    LoopMarks { geometry, height, zoom }
                 }
 
                 StaffLines { line_height, baseline, x_bounds: (start, left + content_width) }
@@ -212,6 +292,33 @@ pub fn Staff(dimensions: StaffDimensions, layout: StaffLayout) -> Element {
                                 }
                             })
                         })
+                }
+            }
+
+            if let Some((start_tab, end_tab)) = loop_tabs {
+                if let Some((x, label, anchor, current)) = start_tab {
+                    button {
+                        class: "loop-tab loop-tab-start",
+                        style: "left: {x - 1.0}px",
+                        title: "Drag to move the start of the loop",
+                        aria_label: "Loop start, {label}. Drag to move",
+                        onmousedown: grab_tab(anchor, current),
+                        // Its own coordinates would throw off the playhead's
+                        onmousemove: |event: MouseEvent| event.stop_propagation(),
+                        "{label}"
+                    }
+                }
+                if let Some((x, label, anchor, current)) = end_tab {
+                    button {
+                        class: "loop-tab loop-tab-end",
+                        style: "left: {x + 1.0}px",
+                        title: "Drag to move the end of the loop",
+                        aria_label: "Loop end, {label}. Drag to move",
+                        onmousedown: grab_tab(anchor, current),
+                        // Its own coordinates would throw off the playhead's
+                        onmousemove: |event: MouseEvent| event.stop_propagation(),
+                        "{label}"
+                    }
                 }
             }
         }

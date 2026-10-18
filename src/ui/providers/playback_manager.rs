@@ -2,7 +2,10 @@ use std::time::{Duration, Instant};
 
 use dioxus::{core::Task, prelude::*};
 
-use crate::{audio, data::score::Score};
+use crate::{
+    audio::{self, wrap_into_loop},
+    data::{loop_range::LoopRange, score::Score},
+};
 
 /// How often the playhead moves while playing
 const FRAME_INTERVAL: Duration = Duration::from_millis(16);
@@ -23,6 +26,9 @@ pub struct PlaybackState {
     /// From 0 to 1
     volume: f64,
     muted: bool,
+    /// The section being practised, which plays over and over. The playhead
+    /// is kept inside it
+    loop_range: Option<LoopRange>,
     /// Set while the score is playing
     clock: Option<PlaybackClock>,
 }
@@ -51,6 +57,7 @@ pub fn use_playback_manager_provider() {
             speed: 1.0,
             volume: 1.0,
             muted: false,
+            loop_range: None,
             clock: None,
         })
     });
@@ -66,25 +73,17 @@ impl PlaybackManager {
         Self { state }
     }
 
-    /// Move the playhead to a written timestamp. When it is in a repeated
-    /// passage, the pass nearest the playhead is used
-    pub fn update_playhead(&mut self, new_playhead: u32, score: &Score) {
-        let performance = &score.performance;
-        let current = self.state.peek().performance_timestamp;
-        let Some(timestamp) = performance.to_performance(new_playhead, current) else {
-            return;
-        };
-
-        if timestamp >= performance.end_timestamp() {
-            return;
-        }
-
-        self.seek(timestamp, score);
-    }
-
-    /// Move the playhead to a performance timestamp
-    fn seek(&mut self, timestamp: u32, score: &Score) {
+    /// Move the playhead to a performance timestamp. Moving it out of the
+    /// loop stops looping
+    pub fn seek(&mut self, timestamp: u32, score: &Score) {
         let mut state = self.state.write();
+        if state
+            .loop_range
+            .is_some_and(|range| !range.contains(timestamp))
+        {
+            state.loop_range = None;
+            audio::set_loop(None);
+        }
         state.performance_timestamp = timestamp;
         state.playhead_timestamp = score.performance.to_written(timestamp);
         // Keep playing from the new position
@@ -93,6 +92,34 @@ impl PlaybackManager {
             clock.start_seconds = score.performance.tempo_map().ticks_to_seconds(timestamp);
             audio::seek(clock.start_seconds);
         }
+    }
+
+    pub fn loop_range(&self) -> Option<LoopRange> {
+        (self.state)().loop_range
+    }
+
+    /// Start looping `range`, moving the playhead to its start if it's
+    /// outside it
+    pub fn set_loop(&mut self, range: LoopRange, score: &Score) {
+        let playhead = {
+            let mut state = self.state.write();
+            state.loop_range = Some(range);
+            if state.clock.is_some() {
+                audio::set_loop(Some(loop_seconds(range, score)));
+            }
+            state.performance_timestamp
+        };
+        if !range.contains(playhead) {
+            self.seek(range.start, score);
+        }
+    }
+
+    pub fn clear_loop(&mut self) {
+        if self.state.peek().loop_range.is_none() {
+            return;
+        }
+        self.state.write().loop_range = None;
+        audio::set_loop(None);
     }
 
     pub fn playhead_timestamp(&self) -> u32 {
@@ -161,10 +188,11 @@ impl PlaybackManager {
         let mut state = self.state;
         let performance = score.performance.clone();
         let end_timestamp = performance.end_timestamp();
-        let start_timestamp = if state.peek().performance_timestamp >= end_timestamp {
-            0
-        } else {
-            state.peek().performance_timestamp
+        let loop_range = state.peek().loop_range;
+        let start_timestamp = match loop_range {
+            Some(range) if !range.contains(state.peek().performance_timestamp) => range.start,
+            _ if state.peek().performance_timestamp >= end_timestamp => 0,
+            _ => state.peek().performance_timestamp,
         };
         let start_seconds = performance.tempo_map().ticks_to_seconds(start_timestamp);
 
@@ -177,7 +205,19 @@ impl PlaybackManager {
                     let Some(clock) = state.clock else {
                         break;
                     };
-                    clock.seconds(state.speed)
+                    let seconds = clock.seconds(state.speed);
+                    // Go round the loop, as the audio thread does
+                    match state.loop_range {
+                        Some(range) => {
+                            let tempo_map = performance.tempo_map();
+                            wrap_into_loop(
+                                seconds,
+                                tempo_map.ticks_to_seconds(range.start),
+                                tempo_map.ticks_to_seconds(range.end),
+                            )
+                        }
+                        None => seconds,
+                    }
                 };
                 let timestamp = performance.tempo_map().seconds_to_ticks(seconds);
 
@@ -195,7 +235,12 @@ impl PlaybackManager {
             }
         });
 
-        audio::play(audio::score_hits(score), start_seconds, state.peek().speed);
+        audio::play(
+            audio::score_hits(score),
+            start_seconds,
+            state.peek().speed,
+            loop_range.map(|range| loop_seconds(range, score)),
+        );
 
         let mut state = state.write();
         state.performance_timestamp = start_timestamp;
@@ -220,6 +265,7 @@ impl PlaybackManager {
     pub fn reset(&mut self) {
         self.pause();
         let mut state = self.state.write();
+        state.loop_range = None;
         state.playhead_timestamp = 0;
         state.performance_timestamp = 0;
     }
@@ -271,6 +317,16 @@ impl PlaybackManager {
             self.seek(prev_timestamp, score);
         }
     }
+}
+
+/// Where a loop starts and ends, in seconds into the performance at the
+/// score's own tempo
+fn loop_seconds(range: LoopRange, score: &Score) -> (f64, f64) {
+    let tempo_map = score.performance.tempo_map();
+    (
+        tempo_map.ticks_to_seconds(range.start),
+        tempo_map.ticks_to_seconds(range.end),
+    )
 }
 
 fn apply_volume(state: &PlaybackState) {

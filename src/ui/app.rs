@@ -6,6 +6,7 @@ use lucide_dioxus::{FolderOpen, ZoomIn, ZoomOut};
 use crate::ui::{
     keyboard_shortcuts::use_keyboard_shortcuts,
     providers::{
+        loop_editor::use_loop_editor_provider,
         playback_manager::{use_playback_manager, use_playback_manager_provider},
         score_manager::{load_score, use_score_manager, use_score_manager_provider},
         zoom::{use_zoom, use_zoom_provider},
@@ -18,6 +19,7 @@ const MAIN_CSS: Asset = asset!("/assets/main.css");
 #[component]
 pub fn App() -> Element {
     use_playback_manager_provider();
+    use_loop_editor_provider();
     use_score_manager_provider();
     use_zoom_provider();
     use_keyboard_shortcuts();

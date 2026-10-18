@@ -39,25 +39,36 @@ enum Command {
         hits: Vec<Hit>,
         from_seconds: f64,
         speed: f64,
+        loop_seconds: Option<(f64, f64)>,
     },
     Seek(f64),
+    SetLoop(Option<(f64, f64)>),
     SetSpeed(f64),
     Stop,
 }
 
 /// Start playing `hits`, sorted by time, from `from_seconds` into the
-/// performance at the score's own tempo. `speed` multiplies that tempo
-pub fn play(hits: Vec<Hit>, from_seconds: f64, speed: f64) {
+/// performance at the score's own tempo. `speed` multiplies that tempo.
+/// See `set_loop` for `loop_seconds`
+pub fn play(hits: Vec<Hit>, from_seconds: f64, speed: f64, loop_seconds: Option<(f64, f64)>) {
     send(Command::Play {
         hits,
         from_seconds,
         speed,
+        loop_seconds,
     });
 }
 
 /// Jump to `seconds` into the performance, while playing
 pub fn seek(seconds: f64) {
     send(Command::Seek(seconds));
+}
+
+/// Go back to the start of `(start, end)`, in seconds into the performance,
+/// whenever playback reaches its end. The jump is made on the audio thread,
+/// so the loop keeps time exactly
+pub fn set_loop(loop_seconds: Option<(f64, f64)>) {
+    send(Command::SetLoop(loop_seconds));
 }
 
 pub fn set_speed(speed: f64) {
@@ -176,6 +187,16 @@ where
     Ok(stream)
 }
 
+/// Where `seconds` lands once it has gone round a loop from `start` to `end`
+/// as many times as it has passed `end`. The UI's playhead uses the same
+/// sum, so it stays in step with what is heard
+pub fn wrap_into_loop(seconds: f64, start: f64, end: f64) -> f64 {
+    if seconds < end || end <= start {
+        return seconds;
+    }
+    start + (seconds - start).rem_euclid(end - start)
+}
+
 /// Runs on the audio thread: triggers hits as their time comes and mixes the
 /// voices that are sounding
 struct Mixer {
@@ -187,6 +208,8 @@ struct Mixer {
     position: f64,
     speed: f64,
     playing: bool,
+    /// Where playback jumps back from and to, in seconds into the performance
+    loop_seconds: Option<(f64, f64)>,
     voices: Vec<Voice>,
     /// Changes for every voice, so overlapping hits don't share their noise
     seed: u32,
@@ -204,6 +227,7 @@ impl Mixer {
             position: 0.0,
             speed: 1.0,
             playing: false,
+            loop_seconds: None,
             voices: Vec::with_capacity(MAX_VOICES),
             seed: 1,
             volume: 1.0,
@@ -217,13 +241,16 @@ impl Mixer {
                 hits,
                 from_seconds,
                 speed,
+                loop_seconds,
             } => {
                 self.hits = hits;
                 self.speed = speed;
+                self.loop_seconds = loop_seconds;
                 self.playing = true;
                 self.seek(from_seconds);
             }
             Command::Seek(seconds) => self.seek(seconds),
+            Command::SetLoop(loop_seconds) => self.loop_seconds = loop_seconds,
             Command::SetSpeed(speed) => self.speed = speed,
             Command::Stop => {
                 self.playing = false;
@@ -250,6 +277,11 @@ impl Mixer {
                 self.next_hit += 1;
             }
             self.position += self.speed / self.sample_rate;
+            if let Some((start, end)) = self.loop_seconds
+                && self.position >= end
+            {
+                self.seek(wrap_into_loop(self.position, start, end));
+            }
         }
 
         let mix: f32 = self.voices.iter_mut().map(Voice::next_sample).sum();

@@ -6,7 +6,10 @@ use crate::{
     ui::{
         hooks::use_size,
         playback_bar::PlaybackBar,
-        providers::{score_manager::use_score_manager, zoom::use_zoom},
+        providers::{
+            loop_editor::use_loop_editor, playback_manager::use_playback_manager,
+            score_manager::use_score_manager, zoom::use_zoom,
+        },
     },
 };
 
@@ -59,6 +62,13 @@ pub fn Score() -> Element {
     let score = use_score_manager();
     let zoom = use_zoom();
     let zoom = zoom.factor() * BASE_SCALE;
+    let mut loop_editor = use_loop_editor();
+    let mut playback_manager = use_playback_manager();
+    let staves_class = if loop_editor.is_dragging() {
+        "staves dragging"
+    } else {
+        "staves"
+    };
     // The staves are laid out as if the window were `1 / zoom` times as wide,
     // then drawn `zoom` times larger, so zooming reflows the measures to fit
     // the window while everything in them, strokes included, scales as one
@@ -82,9 +92,17 @@ pub fn Score() -> Element {
     }));
 
     rsx! {
-        div { class: "score", onresize: handle_on_resize,
+        div {
+            class: "score",
+            onresize: handle_on_resize,
+            // Drags over the score and the measure strip end wherever the
+            // button is let go
+            onmouseup: move |_| loop_editor.finish(&mut playback_manager, &score.peek()),
 
-            div { class: "staves",
+            div {
+                class: staves_class,
+                onmouseenter: move |_| loop_editor.set_hovering_score(true),
+                onmouseleave: move |_| loop_editor.set_hovering_score(false),
                 if score().measures.is_empty() {
                     div { class: "empty-score", "Open a Guitar Pro 8 file to get started" }
                 }

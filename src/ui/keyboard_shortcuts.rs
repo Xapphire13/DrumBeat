@@ -18,15 +18,16 @@ enum Modifier {
 /// Listens on the whole document, so the shortcuts work wherever focus is,
 /// except while typing in a text or number field such as the BPM box. The
 /// keys' default actions, like scrolling the score or nudging the tempo
-/// slider, are suppressed
+/// slider, are suppressed. Escape inside the tempo popover is left to close it
 const LISTENER: &str = r#"
-const keys = new Set([" ", "ArrowLeft", "ArrowRight", "Home", "End", "m"]);
+const keys = new Set([" ", "ArrowLeft", "ArrowRight", "Home", "End", "m", "Escape"]);
 const cmdKeys = new Set(["-", "=", "+", "0"]);
 document.addEventListener("keydown", (event) => {
     if (!keys.has(event.key) && !(event.metaKey && cmdKeys.has(event.key))) return;
     const target = event.target;
     if (target instanceof HTMLTextAreaElement) return;
     if (target instanceof HTMLInputElement && target.type !== "range") return;
+    if (event.key === "Escape" && target.closest && target.closest(".tempo-popover")) return;
     event.preventDefault();
     dioxus.send({
         key: event.key,
@@ -71,8 +72,8 @@ impl KeyPress {
 
 /// Space plays and pauses, Left/Right step between notes, the measure
 /// modifier with Left/Right steps between measures, and Home/End jump to the
-/// start and end of the score, M mutes, and Cmd with -, = (or +) and 0 zoom
-/// out, in and back to 100%
+/// start and end of the score, M mutes, Escape stops looping, and Cmd with
+/// -, = (or +) and 0 zoom out, in and back to 100%
 pub fn use_keyboard_shortcuts() {
     let mut playback_manager = use_playback_manager();
     let score = use_score_manager();
@@ -104,6 +105,7 @@ pub fn use_keyboard_shortcuts() {
                 "Home" if press.no_modifiers() => playback_manager.skip_to_start(&score),
                 "End" if press.no_modifiers() => playback_manager.skip_to_end(&score),
                 "m" if press.no_modifiers() && !press.repeat => playback_manager.toggle_mute(),
+                "Escape" if press.no_modifiers() => playback_manager.clear_loop(),
                 "-" if press.cmd() => zoom.zoom_out(),
                 "=" | "+" if press.cmd() => zoom.zoom_in(),
                 "0" if press.cmd() => zoom.reset(),
