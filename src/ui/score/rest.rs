@@ -4,6 +4,15 @@ use crate::data::note::{NoteValue, Rest as RestData};
 
 use super::measure_scale::MeasureScale;
 
+const QUARTER_REST_PATH: &str = "M 0.1754 -0.2385 C 0.0839 -0.1294 0.0381 -0.0478 0.0381 0.0061 \
+     C 0.0381 0.0582 0.0817 0.1362 0.1688 0.2404 L 0.1415 0.2789 \
+     C 0.0977 0.2532 0.0600 0.2404 0.0287 0.2404 C -0.0121 0.2404 -0.0324 0.2648 -0.0324 0.3137 \
+     C -0.0324 0.3639 -0.0102 0.4138 0.0343 0.4633 L 0.0099 0.5000 \
+     C -0.1136 0.4084 -0.1754 0.3269 -0.1754 0.2554 C -0.1754 0.2190 -0.1629 0.1902 -0.1378 0.1689 \
+     C -0.1146 0.1488 -0.0845 0.1388 -0.0475 0.1388 C -0.0237 0.1388 0.0027 0.1450 0.0315 0.1576 \
+     L -0.1575 -0.0936 C -0.0679 -0.1726 -0.0230 -0.2441 -0.0230 -0.3081 \
+     C -0.0230 -0.3589 -0.0535 -0.4229 -0.1143 -0.5000 L -0.0390 -0.5000 Z";
+
 /// A rest, centred on `center_line`. A rest lasting the whole measure is
 /// drawn in the middle of it
 #[component]
@@ -51,24 +60,18 @@ pub fn Rest(
                 stroke: "none",
             }
         },
+        // Crotchet rest outline from Wikimedia Commons
+        // (Crotchet_rest_alt_plain-svg.svg), normalised to unit height around
+        // its centre
         NoteValue::Quarter => {
-            let d = format!(
-                "M {} L {} L {} L {} Q {} {}",
-                point(-0.15, -1.4),
-                point(0.25, -0.8),
-                point(-0.15, -0.25),
-                point(0.25, 0.3),
-                point(-0.35, 0.15),
-                point(0.0, 1.0),
-            );
+            let height = 2.8 * line_height;
+            let transform = format!("translate({x} {}) scale({height})", y - 0.2 * line_height);
             rsx! {
                 path {
-                    d,
-                    fill: "none",
-                    stroke: "black",
-                    stroke_width: 0.2 * line_height,
-                    stroke_linejoin: "round",
-                    stroke_linecap: "round",
+                    d: QUARTER_REST_PATH,
+                    transform,
+                    fill: "black",
+                    stroke: "none",
                 }
             }
         }
