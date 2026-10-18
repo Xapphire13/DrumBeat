@@ -641,6 +641,7 @@ body {
 .view-tabs {
     display: flex;
     flex-shrink: 0;
+    gap: 2px;
     height: 32px;
     box-sizing: border-box;
     padding: 2px;
@@ -658,8 +659,16 @@ body {
     color: var(--muted);
 }
 
-.toolbar .view-tab.selected {
-    background: #232733;
+/* Hover is a step dimmer than the selected tab, so the two stay apart */
+.toolbar .view-tab:hover,
+.toolbar .view-tab:focus-visible {
+    background: #1d2029;
+    color: #f4f5f7;
+}
+
+.toolbar .view-tab.selected,
+.toolbar .view-tab.selected:hover {
+    background: #262a35;
     color: #f4f5f7;
 }
 
