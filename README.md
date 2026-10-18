@@ -23,3 +23,12 @@ To run for a different platform, use the `--platform platform` flag. E.g.
 dx serve --platform desktop
 ```
 
+### Bundling the macOS App
+
+The app icon lives in `assets/icon.svg`. Render it to the PNG the bundler expects, then bundle:
+
+```bash
+brew install librsvg   # once, for rsvg-convert
+./scripts/build-icon.sh
+dx bundle --platform desktop
+```

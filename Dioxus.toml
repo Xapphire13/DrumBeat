@@ -23,3 +23,5 @@ script = []
 [bundle]
 identifier = "com.xapphire13.drumbeat"
 publisher = "Xapphire13"
+# Generated from assets/icon.svg by scripts/build-icon.sh
+icon = ["assets/icon.png"]

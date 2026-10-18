@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+<defs>
+  <filter id="blur" x="-10%" y="-10%" width="120%" height="130%"><feGaussianBlur stdDeviation="14"/></filter>
+    <linearGradient id="a-tile" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#262a35"/><stop offset="1" stop-color="#0f1116"/></linearGradient>
+    <radialGradient id="a-head" cx=".42" cy=".36" r=".75"><stop offset="0" stop-color="#ffffff"/><stop offset=".7" stop-color="#e9ebf2"/><stop offset="1" stop-color="#c9ccd6"/></radialGradient>
+    <linearGradient id="a-hoop" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#d9dce6"/><stop offset="1" stop-color="#6b7080"/></linearGradient>
+  </defs>
+  <rect x="100" y="112" width="824" height="824" rx="186" fill="#000" opacity=".28" filter="url(#blur)"/>
+  <rect x="100" y="100" width="824" height="824" rx="186" fill="url(#a-tile)"/>
+  <circle cx="512" cy="512" r="336" fill="#0b0d12"/>
+  <rect x="597.0" y="167.2" width="34" height="62" rx="17.0" fill="url(#a-hoop)" transform="rotate(18.0 614.0 198.2)" />
+<rect x="762.0" y="287.0" width="34" height="62" rx="17.0" fill="url(#a-hoop)" transform="rotate(54.0 779.0 318.0)" />
+<rect x="825.0" y="481.0" width="34" height="62" rx="17.0" fill="url(#a-hoop)" transform="rotate(90.0 842.0 512.0)" />
+<rect x="762.0" y="675.0" width="34" height="62" rx="17.0" fill="url(#a-hoop)" transform="rotate(126.0 779.0 706.0)" />
+<rect x="597.0" y="794.8" width="34" height="62" rx="17.0" fill="url(#a-hoop)" transform="rotate(162.0 614.0 825.8)" />
+<rect x="393.0" y="794.8" width="34" height="62" rx="17.0" fill="url(#a-hoop)" transform="rotate(198.0 410.0 825.8)" />
+<rect x="228.0" y="675.0" width="34" height="62" rx="17.0" fill="url(#a-hoop)" transform="rotate(234.0 245.0 706.0)" />
+<rect x="165.0" y="481.0" width="34" height="62" rx="17.0" fill="url(#a-hoop)" transform="rotate(270.0 182.0 512.0)" />
+<rect x="228.0" y="287.0" width="34" height="62" rx="17.0" fill="url(#a-hoop)" transform="rotate(306.0 245.0 318.0)" />
+<rect x="393.0" y="167.2" width="34" height="62" rx="17.0" fill="url(#a-hoop)" transform="rotate(342.0 410.0 198.2)" />
+  <circle cx="512" cy="512" r="312" fill="url(#a-hoop)"/>
+  <circle cx="512" cy="512" r="292" fill="url(#a-head)"/>
+  <circle cx="512" cy="512" r="292" fill="none" stroke="#000" stroke-opacity=".12" stroke-width="4"/>
+  <g transform="translate(494,512) scale(0.84) translate(0,11.94)" ><ellipse cx="-95" cy="110" rx="80" ry="57" transform="rotate(-24 -95 110)" fill="#8b6cff"/><ellipse cx="95" cy="80" rx="80" ry="57" transform="rotate(-24 95 80)" fill="#8b6cff"/><path d="M-46.33 -195.28 L171.67 -232.00 L171.67 64.73 L143.67 64.73 L143.67 -169.28 L-18.33 -142.00 L-18.33 94.73 L-46.33 94.73 Z" fill="#8b6cff"/></g>
+</svg>
