@@ -28,6 +28,7 @@ impl LoopGeometry {
         scales: &[MeasureScale],
     ) -> Self {
         let spans = range.written_spans(performance);
+        let coverage = range.written_coverage(performance);
         let mut geometry = LoopGeometry::default();
         let (Some(&(loop_start, _)), Some(&(_, loop_end))) = (spans.first(), spans.last()) else {
             return geometry;
@@ -35,7 +36,8 @@ impl LoopGeometry {
 
         for (measure, scale) in measures.iter().zip(scales) {
             let (measure_start, measure_end) = (measure.timestamp, measure.end_timestamp());
-            for &(start, end) in &spans {
+            // Tinted once, however many passes of a repeat the loop plays
+            for &(start, end) in &coverage {
                 let (from, to) = (start.max(measure_start), end.min(measure_end));
                 if from < to {
                     geometry

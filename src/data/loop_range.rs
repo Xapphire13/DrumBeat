@@ -119,6 +119,24 @@ impl LoopRange {
     }
 }
 
+impl LoopRange {
+    /// The parts of the written score the loop plays, each once however many
+    /// times it's played, sorted and without overlaps. A loop over several
+    /// passes of a repeat plays the repeated measures more than once
+    pub fn written_coverage(&self, performance: &Performance) -> Vec<(u32, u32)> {
+        let mut spans = self.written_spans(performance);
+        spans.sort_unstable();
+        let mut coverage: Vec<(u32, u32)> = vec![];
+        for (start, end) in spans {
+            match coverage.last_mut() {
+                Some((_, last_end)) if start <= *last_end => *last_end = (*last_end).max(end),
+                _ => coverage.push((start, end)),
+            }
+        }
+        coverage
+    }
+}
+
 /// Where a performance timestamp falls, counted as a drummer would: the
 /// played measure's number, the beat, and how far into the beat, e.g. "17:2"
 /// for measure 17 beat 2, or "20:4&" for the and of beat 4. The very end of
@@ -350,6 +368,40 @@ mod tests {
             vec![
                 (MEASURE + 4 * EIGHTH, 2 * MEASURE),
                 (MEASURE, MEASURE + 4 * EIGHTH)
+            ]
+        );
+    }
+
+    #[test]
+    fn coverage_tints_each_written_measure_once() {
+        // Measure 0, then 1 played three times, then 2
+        let measures = measures(&[(false, None), (true, Some(3)), (false, None)]);
+        let performance = performance(&measures);
+        // From halfway through measure 0, through every pass, into measure 2
+        let range = LoopRange::between(
+            N(4 * EIGHTH),
+            N(4 * MEASURE + EIGHTH),
+            &performance,
+            &measures,
+        );
+        assert_eq!(range.written_spans(&performance).len(), 3);
+        assert_eq!(
+            range.written_coverage(&performance),
+            vec![(4 * EIGHTH, 2 * MEASURE + 2 * EIGHTH)]
+        );
+
+        // The end of one pass and the start of the next leave a gap between
+        let range = LoopRange::between(
+            N(2 * MEASURE - EIGHTH),
+            N(2 * MEASURE + EIGHTH),
+            &performance,
+            &measures,
+        );
+        assert_eq!(
+            range.written_coverage(&performance),
+            vec![
+                (MEASURE, MEASURE + 2 * EIGHTH),
+                (2 * MEASURE - EIGHTH, 2 * MEASURE)
             ]
         );
     }
