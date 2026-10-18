@@ -7,8 +7,10 @@ use crate::{
         hooks::use_size,
         playback_bar::PlaybackBar,
         providers::{
-            loop_editor::use_loop_editor, playback_manager::use_playback_manager,
-            score_manager::use_score_manager, zoom::use_zoom,
+            loop_editor::{LoopEditor, use_loop_editor},
+            playback_manager::use_playback_manager,
+            score_manager::use_score_manager,
+            zoom::use_zoom,
         },
     },
 };
@@ -64,6 +66,7 @@ pub fn Score() -> Element {
     let zoom = zoom.factor() * BASE_SCALE;
     let mut loop_editor = use_loop_editor();
     let mut playback_manager = use_playback_manager();
+    use_hover_tracking(loop_editor);
     let staves_class = if loop_editor.is_dragging() {
         "staves dragging"
     } else {
@@ -99,10 +102,7 @@ pub fn Score() -> Element {
             // button is let go
             onmouseup: move |_| loop_editor.finish(&mut playback_manager, &score.peek()),
 
-            div {
-                class: staves_class,
-                onmouseenter: move |_| loop_editor.set_hovering_score(true),
-                onmouseleave: move |_| loop_editor.set_hovering_score(false),
+            div { class: staves_class,
                 if score().measures.is_empty() {
                     div { class: "empty-score", "Open a Guitar Pro 8 file to get started" }
                 }
@@ -122,6 +122,35 @@ pub fn Score() -> Element {
             PlaybackBar {}
         }
     }
+}
+
+/// Reports whether the pointer is anywhere over the staves. Done in the page
+/// with `mouseover`, which names the element the pointer is now over: the
+/// staves are made of a row per staff, and the leave and enter events as the
+/// pointer crosses from one row to the next reach the staves too, so they
+/// can't tell whether it's still inside
+const HOVER_LISTENER: &str = r#"
+let inside = false;
+const update = (now) => {
+    if (now !== inside) {
+        inside = now;
+        dioxus.send(now);
+    }
+};
+document.addEventListener("mouseover", (event) => {
+    const target = event.target;
+    update(!!(target && target.closest && target.closest(".staves")));
+});
+document.documentElement.addEventListener("mouseleave", () => update(false));
+"#;
+
+fn use_hover_tracking(mut loop_editor: LoopEditor) {
+    use_future(move || async move {
+        let mut listener = document::eval(HOVER_LISTENER);
+        while let Ok(hovering) = listener.recv::<bool>().await {
+            loop_editor.set_hovering_score(hovering);
+        }
+    });
 }
 
 /// Stretching a measure past this many times its natural width looks sparse,

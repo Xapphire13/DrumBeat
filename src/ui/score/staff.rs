@@ -4,7 +4,7 @@ use dioxus::{html::input_data::MouseButton, prelude::*};
 
 use crate::{
     data::{
-        loop_range::count_label,
+        loop_range::{LoopPoint, count_label},
         measure::{Fill, Measure as MeasureData},
         position::Position,
         score::{Hairpin, HairpinKind},
@@ -21,7 +21,7 @@ use crate::{
             measure::Measure,
             measure_scale::MeasureScale,
             staff::{
-                loop_marks::{LoopGeometry, LoopMarks},
+                loop_marks::{LoopGeometry, LoopMarks, closest_loop_point},
                 phantom_playhead::{PhantomPlayhead, closest_snap, use_phantom_playhead_data},
                 playhead::Playhead,
                 staff_lines::StaffLines,
@@ -101,14 +101,27 @@ pub fn Staff(dimensions: StaffDimensions, layout: StaffLayout) -> Element {
 
     let mut loop_editor = use_loop_editor();
 
-    // The note under the pointer, on the performance timeline, taking the
-    // pass through a repeat nearest `near`
+    // The note under the pointer, where the playhead snaps, on the pass
+    // through a repeat nearest `near`
     let note_at = {
         let measures = measures.clone();
         move |event: &MouseEvent, near: u32| {
             let x = event.coordinates().element().x as f32 / zoom;
             let written = closest_snap(x, &scales.peek(), &measures)?.closest_timestamp;
             score.peek().performance.to_performance(written, near)
+        }
+    };
+
+    // Where the dragged end of the loop goes with the pointer here
+    let loop_point_at = {
+        let measures = measures.clone();
+        move |event: &MouseEvent, by_tab: bool, near: u32| {
+            let x = event.coordinates().element().x as f32 / zoom;
+            closest_loop_point(x, &scales.peek(), &measures, by_tab)?.locate(
+                first_measure_number - 1,
+                &score.peek().performance,
+                near,
+            )
         }
     };
 
@@ -122,10 +135,11 @@ pub fn Staff(dimensions: StaffDimensions, layout: StaffLayout) -> Element {
             }
             let playhead = playback_manager.performance_timestamp();
             if let Some(anchor) = note_at(&event, playhead) {
-                loop_editor.start_drag(LoopDrag::Notes {
-                    anchor,
-                    current: anchor,
+                loop_editor.start_drag(LoopDrag::Score {
+                    anchor: LoopPoint::Note(anchor),
+                    current: LoopPoint::Note(anchor),
                     moved: false,
+                    by_tab: false,
                 });
             }
         }
@@ -133,14 +147,14 @@ pub fn Staff(dimensions: StaffDimensions, layout: StaffLayout) -> Element {
 
     let handle_on_mouse_move = move |event: MouseEvent| {
         handle_on_mouse_move.call(event.clone());
-        let Some(LoopDrag::Notes { anchor, .. }) = loop_editor.drag() else {
+        let Some(LoopDrag::Score { anchor, by_tab, .. }) = loop_editor.drag() else {
             return;
         };
         // Released outside the window
         if event.held_buttons().is_empty() {
             loop_editor.finish(&mut playback_manager, &score.peek());
-        } else if let Some(timestamp) = note_at(&event, anchor) {
-            loop_editor.drag_to_note(timestamp);
+        } else if let Some(point) = loop_point_at(&event, by_tab, anchor.timestamp()) {
+            loop_editor.drag_to(point);
         }
     };
 
@@ -156,23 +170,26 @@ pub fn Staff(dimensions: StaffDimensions, layout: StaffLayout) -> Element {
         .map(|(range, geometry)| {
             let score = score.read();
             let label = |timestamp| count_label(timestamp, &score.performance, &score.measures);
+            // Each tab names the count at the edge it sits on. The loop goes
+            // up to the end tab's count without playing it
             (
                 geometry
                     .start_x
-                    .map(|x| (x * zoom, label(range.start), range.last, range.start)),
+                    .map(|x| (x * zoom, label(range.start), range.end, range.start)),
                 geometry
                     .end_x
-                    .map(|x| (x * zoom, label(range.last), range.start, range.last)),
+                    .map(|x| (x * zoom, label(range.end), range.start, range.end)),
             )
         });
     // Grabbing a tab drags that end of the loop, keeping the other in place
     let grab_tab = move |anchor: u32, current: u32| {
         move |event: MouseEvent| {
             event.stop_propagation();
-            loop_editor.start_drag(LoopDrag::Notes {
-                anchor,
-                current,
+            loop_editor.start_drag(LoopDrag::Score {
+                anchor: LoopPoint::Edge(anchor),
+                current: LoopPoint::Edge(current),
                 moved: true,
+                by_tab: true,
             });
         }
     };

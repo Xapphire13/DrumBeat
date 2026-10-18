@@ -119,6 +119,17 @@ impl Performance {
             .min_by_key(|&timestamp| timestamp.abs_diff(near))
     }
 
+    /// Where a place `offset` ticks into a written measure is played, on the
+    /// pass nearest `near`. The offset can be the measure's length, for its
+    /// closing bar line
+    pub fn locate(&self, measure_index: usize, offset: u32, near: u32) -> Option<u32> {
+        self.measures
+            .iter()
+            .filter(|played| played.measure_index == measure_index && offset <= played.length)
+            .map(|played| played.timestamp + offset)
+            .min_by_key(|&timestamp| timestamp.abs_diff(near))
+    }
+
     /// Sorted, unique performance timestamps of every note that is played
     /// (tied continuations are skipped)
     pub fn note_timestamps(&self, measures: &[Measure]) -> Vec<u32> {

@@ -1,20 +1,23 @@
 use dioxus::prelude::*;
 
 use crate::{
-    data::{loop_range::LoopRange, score::Score},
+    data::{
+        loop_range::{LoopPoint, LoopRange},
+        score::Score,
+    },
     ui::providers::playback_manager::PlaybackManager,
 };
 
 /// A drag that's setting or changing the loop
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum LoopDrag {
-    /// Across notes in the score, or by one of the loop's tabs. `anchor` is
-    /// the note that stays put and `current` the one under the pointer, both
-    /// on the performance timeline
-    Notes {
-        anchor: u32,
-        current: u32,
+    /// Across the score, or by one of the loop's tabs (`by_tab`). `anchor`
+    /// is the end that stays put and `current` the one under the pointer
+    Score {
+        anchor: LoopPoint,
+        current: LoopPoint,
         moved: bool,
+        by_tab: bool,
     },
     /// Across the measure strip, by index into the played measures
     Measures {
@@ -29,11 +32,12 @@ impl LoopDrag {
     fn preview(self, score: &Score) -> Option<LoopRange> {
         let performance = &score.performance;
         match self {
-            LoopDrag::Notes {
+            LoopDrag::Score {
                 anchor,
                 current,
                 moved: true,
-            } => Some(LoopRange::between_notes(
+                ..
+            } => Some(LoopRange::between(
                 anchor,
                 current,
                 performance,
@@ -70,17 +74,21 @@ impl LoopEditor {
         self.drag.set(Some(drag));
     }
 
-    /// Move the dragged end of the loop to the note at `timestamp`
-    pub fn drag_to_note(&mut self, timestamp: u32) {
-        if let Some(LoopDrag::Notes {
-            anchor, current, ..
+    /// Move the dragged end of the loop to `point`
+    pub fn drag_to(&mut self, point: LoopPoint) {
+        if let Some(LoopDrag::Score {
+            anchor,
+            current,
+            by_tab,
+            ..
         }) = self.drag.cloned()
-            && current != timestamp
+            && current != point
         {
-            self.drag.set(Some(LoopDrag::Notes {
+            self.drag.set(Some(LoopDrag::Score {
                 anchor,
-                current: timestamp,
+                current: point,
                 moved: true,
+                by_tab,
             }));
         }
     }
@@ -119,7 +127,11 @@ impl LoopEditor {
         };
         match (drag, drag.preview(score)) {
             (_, Some(range)) => playback_manager.set_loop(range, score),
-            (LoopDrag::Notes { anchor, .. }, None) => playback_manager.seek(anchor, score),
+            (LoopDrag::Score { anchor, .. }, None) => {
+                if anchor.timestamp() < score.performance.end_timestamp() {
+                    playback_manager.seek(anchor.timestamp(), score);
+                }
+            }
             (LoopDrag::Measures { anchor, .. }, None) => {
                 if let Some(played) = score.performance.measures().get(anchor) {
                     playback_manager.seek(played.timestamp, score);

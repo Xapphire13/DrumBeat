@@ -268,20 +268,37 @@ impl Mixer {
         self.next_hit = self.hits.partition_point(|hit| hit.seconds < seconds);
     }
 
+    /// The next hit whose time has come, if any, which is then counted as
+    /// played
+    fn next_due_hit(&mut self) -> Option<Hit> {
+        let hit = *self.hits.get(self.next_hit)?;
+        if hit.seconds > self.position {
+            return None;
+        }
+        self.next_hit += 1;
+        Some(hit)
+    }
+
+    /// Move on by one sample, going round the loop at its end
+    fn advance(&mut self) {
+        self.position += self.speed / self.sample_rate;
+        if let Some((start, end)) = self.loop_seconds
+            && self.position >= end
+        {
+            self.position = wrap_into_loop(self.position, start, end);
+            // The new position is a fraction of a sample past the start, so
+            // a plain seek would skip the hits right on it, dropping the
+            // loop's first note every time round
+            self.next_hit = self.hits.partition_point(|hit| hit.seconds < start);
+        }
+    }
+
     fn next_sample(&mut self) -> f32 {
         if self.playing {
-            while let Some(&hit) = self.hits.get(self.next_hit)
-                && hit.seconds <= self.position
-            {
+            while let Some(hit) = self.next_due_hit() {
                 self.trigger(hit);
-                self.next_hit += 1;
             }
-            self.position += self.speed / self.sample_rate;
-            if let Some((start, end)) = self.loop_seconds
-                && self.position >= end
-            {
-                self.seek(wrap_into_loop(self.position, start, end));
-            }
+            self.advance();
         }
 
         let mix: f32 = self.voices.iter_mut().map(Voice::next_sample).sum();
@@ -312,5 +329,65 @@ impl Mixer {
             self.sample_rate as f32,
             self.seed,
         ));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::audio::voice::Sound;
+
+    fn hit(seconds: f64) -> Hit {
+        Hit {
+            seconds,
+            sound: Sound::Snare,
+            velocity: 1.0,
+        }
+    }
+
+    /// Run the mixer's clock for `samples`, returning the times hits were
+    /// played at
+    fn run(mixer: &mut Mixer, samples: usize) -> Vec<f64> {
+        let mut played = vec![];
+        for _ in 0..samples {
+            while let Some(hit) = mixer.next_due_hit() {
+                played.push(hit.seconds);
+            }
+            mixer.advance();
+        }
+        played
+    }
+
+    #[test]
+    fn loop_plays_its_first_note_every_time_round() {
+        // 1000 samples a second, so the loop is 750 samples long
+        let mut mixer = Mixer::new(1000.0);
+        mixer.handle(Command::Play {
+            hits: vec![hit(0.0), hit(0.25), hit(0.5), hit(1.0)],
+            from_seconds: 0.25,
+            speed: 1.0,
+            loop_seconds: Some((0.25, 1.0)),
+        });
+
+        let played = run(&mut mixer, 2250);
+        // The hit at the loop's end is never reached, and the one at its
+        // start is played each time round
+        assert_eq!(played, [0.25, 0.5, 0.25, 0.5, 0.25, 0.5]);
+    }
+
+    #[test]
+    fn wrap_keeps_time() {
+        // A loop that isn't a whole number of samples long
+        let mut mixer = Mixer::new(1000.0);
+        mixer.handle(Command::Play {
+            hits: vec![],
+            from_seconds: 0.0,
+            speed: 1.0,
+            loop_seconds: Some((0.0, 0.0105)),
+        });
+        run(&mut mixer, 100);
+        // 100 samples is 0.1s, 9 times round with 0.0055s left over
+        assert!((mixer.position - 0.0055).abs() < 1e-9);
+        assert!((wrap_into_loop(0.1, 0.0, 0.0105) - 0.0055).abs() < 1e-9);
     }
 }

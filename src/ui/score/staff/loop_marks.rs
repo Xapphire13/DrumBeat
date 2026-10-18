@@ -1,7 +1,11 @@
 use dioxus::prelude::*;
 
 use crate::{
-    data::{loop_range::LoopRange, measure::Measure, performance::Performance},
+    data::{
+        loop_range::{LoopPoint, LoopRange},
+        measure::Measure,
+        performance::Performance,
+    },
     ui::score::{measure_scale::MeasureScale, note::head_half_width},
 };
 
@@ -48,6 +52,83 @@ impl LoopGeometry {
         }
         geometry
     }
+}
+
+/// A place on a staff that a loop's end can be dragged to
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub struct StaffPoint {
+    /// Index of the measure on the staff
+    pub measure: usize,
+    /// Ticks into the measure, up to its length for its closing bar line
+    pub offset: u32,
+    /// Whether it's a note, rather than an edge between notes
+    pub note: bool,
+}
+
+impl StaffPoint {
+    /// Where the point is played, on the pass through a repeat nearest
+    /// `near`. `first_measure` is the index in the score of the staff's
+    /// first measure
+    pub fn locate(
+        self,
+        first_measure: usize,
+        performance: &Performance,
+        near: u32,
+    ) -> Option<LoopPoint> {
+        let timestamp = performance.locate(first_measure + self.measure, self.offset, near)?;
+        Some(if self.note {
+            LoopPoint::Note(timestamp)
+        } else {
+            LoopPoint::Edge(timestamp)
+        })
+    }
+}
+
+/// The place on the staff nearest `x` that a loop's end snaps to.
+///
+/// Dragging across the score snaps to notes, the start of each measure, and
+/// the bar line closing each measure, so a loop can end with the measure
+/// rather than taking in the next one's first note. Dragging a loop's tab
+/// (`edges`) snaps to where the loop's edge would be drawn: just ahead of each
+/// note, and the bar lines
+pub fn closest_loop_point(
+    x: f32,
+    scales: &[MeasureScale],
+    measures: &[Measure],
+    edges: bool,
+) -> Option<StaffPoint> {
+    let mut candidates: Vec<(StaffPoint, f32)> = vec![];
+    for (i, (measure, scale)) in measures.iter().zip(scales).enumerate() {
+        let mut onsets: Vec<u32> = std::iter::once(measure.timestamp)
+            .chain(measure.notes.iter().map(|note| note.timestamp))
+            .collect();
+        onsets.sort_unstable();
+        onsets.dedup();
+        for timestamp in onsets {
+            let point = StaffPoint {
+                measure: i,
+                offset: timestamp - measure.timestamp,
+                note: !edges,
+            };
+            let x = if edges {
+                start_x(timestamp, measure, scale)
+            } else {
+                scale.get_x(timestamp)
+            };
+            candidates.push((point, x));
+        }
+        let closing = StaffPoint {
+            measure: i,
+            offset: measure.get_length(),
+            note: false,
+        };
+        candidates.push((closing, scale.outer_x_bounds.1));
+    }
+
+    candidates
+        .into_iter()
+        .min_by(|(_, a), (_, b)| (a - x).abs().total_cmp(&(b - x).abs()))
+        .map(|(point, _)| point)
 }
 
 /// A little ahead of a note, so the loop takes in its head
@@ -102,5 +183,68 @@ pub fn LoopMarks(geometry: LoopGeometry, height: f32, zoom: f32) -> Element {
                 y2: height,
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::data::{
+        measure::Fill,
+        note::{Articulation, Duration, Note, NoteValue},
+        time_signature::TimeSignature,
+    };
+
+    /// A 4/4 measure of eighth notes, drawn from x 0 to 400
+    fn measure() -> (Measure, MeasureScale) {
+        let measure = Measure {
+            timestamp: 0,
+            notes: (0..8)
+                .map(|n| Note {
+                    duration: Duration::new(NoteValue::Eighth),
+                    midi_note: 38,
+                    timestamp: n * 480,
+                    tied: false,
+                    voice: 0,
+                    articulation: Articulation::Normal,
+                    annotation: None,
+                })
+                .collect(),
+            rests: vec![],
+            grace_notes: vec![],
+            time_signature: TimeSignature {
+                notes_per_measure: 4,
+                note_value: NoteValue::Quarter,
+            },
+            repeat_start: false,
+            repeat_end: None,
+            fill: Fill::Full,
+        };
+        let scale = MeasureScale::new((0.0, 400.0), 100.0, 20.0, &measure);
+        (measure, scale)
+    }
+
+    #[test]
+    fn dragging_onto_the_bar_line_ends_the_loop_with_the_measure() {
+        let (measure, scale) = measure();
+        let (measures, scales) = (vec![measure], vec![scale.clone()]);
+        let last_note = scale.get_x(7 * 480);
+
+        let point = closest_loop_point(last_note, &scales, &measures, false).unwrap();
+        assert_eq!((point.offset, point.note), (7 * 480, true));
+        let point = closest_loop_point(399.0, &scales, &measures, false).unwrap();
+        assert_eq!((point.offset, point.note), (3840, false));
+    }
+
+    #[test]
+    fn tabs_snap_to_the_edges_the_loop_is_drawn_at() {
+        let (measure, scale) = measure();
+        let (measures, scales) = (vec![measure.clone()], vec![scale.clone()]);
+        // Just ahead of the last note, where a loop ending there is drawn
+        let edge = start_x(7 * 480, &measure, &scale);
+        let point = closest_loop_point(edge + 1.0, &scales, &measures, true).unwrap();
+        assert_eq!((point.offset, point.note), (7 * 480, false));
+        let point = closest_loop_point(1.0, &scales, &measures, true).unwrap();
+        assert_eq!((point.offset, point.note), (0, false));
     }
 }

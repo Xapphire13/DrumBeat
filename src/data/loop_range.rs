@@ -1,31 +1,62 @@
 use super::{measure::Measure, performance::Performance};
 
-/// A stretch of the performance that plays over and over, from one note to
-/// the end of another. Timestamps are on the performance timeline, so a loop
-/// can be one particular pass through a repeat
+/// One end of a loop being picked out, on the performance timeline
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum LoopPoint {
+    /// A note, which the loop takes in whichever end of it it's at
+    Note(u32),
+    /// A place between notes, such as a bar line, where the loop can start
+    /// or stop
+    Edge(u32),
+}
+
+impl LoopPoint {
+    pub fn timestamp(self) -> u32 {
+        match self {
+            LoopPoint::Note(timestamp) | LoopPoint::Edge(timestamp) => timestamp,
+        }
+    }
+}
+
+/// A stretch of the performance that plays over and over. Timestamps are on
+/// the performance timeline, so a loop can be one particular pass through a
+/// repeat
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct LoopRange {
-    /// Where the first note is played
+    /// Where the loop starts
     pub start: u32,
-    /// Where the last note is played
-    pub last: u32,
-    /// Where playback goes back to `start`: the next note after `last`, or
-    /// the end of its measure
+    /// Where playback goes back to `start`, which isn't played itself
     pub end: u32,
 }
 
 impl LoopRange {
-    /// A loop from the note at `a` to the note at `b`, in either order. Both
-    /// should be snap points of the performance
-    pub fn between_notes(a: u32, b: u32, performance: &Performance, measures: &[Measure]) -> Self {
-        let (start, last) = (a.min(b), a.max(b));
-        let end = performance
-            .snap_points(measures)
-            .into_iter()
-            .find(|&timestamp| timestamp > last)
-            .unwrap_or_else(|| performance.end_timestamp())
-            .max(last + 1);
-        Self { start, last, end }
+    /// A loop between two points, in either order. Ending on a note takes in
+    /// the whole of it, up to the next snap point of the performance
+    pub fn between(
+        a: LoopPoint,
+        b: LoopPoint,
+        performance: &Performance,
+        measures: &[Measure],
+    ) -> Self {
+        // An edge at a note's time comes just before the note
+        let order = |point: LoopPoint| (point.timestamp(), matches!(point, LoopPoint::Note(_)));
+        let (first, second) = if order(a) <= order(b) { (a, b) } else { (b, a) };
+        let snap_points = performance.snap_points(measures);
+        let after = |timestamp: u32| {
+            snap_points
+                .iter()
+                .copied()
+                .find(|&snap| snap > timestamp)
+                .unwrap_or_else(|| performance.end_timestamp())
+                .max(timestamp + 1)
+        };
+        let start = first.timestamp();
+        let end = match second {
+            LoopPoint::Note(timestamp) => after(timestamp),
+            LoopPoint::Edge(timestamp) if timestamp > start => timestamp,
+            LoopPoint::Edge(_) => after(start),
+        };
+        Self { start, end }
     }
 
     /// A loop over whole played measures, from the one at index `a` in
@@ -38,15 +69,12 @@ impl LoopRange {
     ) -> Option<Self> {
         let played = performance.measures();
         let (first, last) = (played.get(a.min(b))?, played.get(a.max(b))?);
-        let (start, end) = (first.timestamp, last.timestamp + last.length);
-        let last = performance
-            .snap_points(measures)
-            .into_iter()
-            .take_while(|&timestamp| timestamp < end)
-            .last()
-            .unwrap_or(start)
-            .max(start);
-        Some(Self { start, last, end })
+        Some(Self::between(
+            LoopPoint::Edge(first.timestamp),
+            LoopPoint::Edge(last.timestamp + last.length),
+            performance,
+            measures,
+        ))
     }
 
     pub fn contains(&self, timestamp: u32) -> bool {
@@ -110,8 +138,12 @@ impl LoopRange {
 
 /// Where a performance timestamp falls, counted as a drummer would: the
 /// played measure's number, the beat, and how far into the beat, e.g. "17:2"
-/// for measure 17 beat 2, or "20:4&" for the and of beat 4
+/// for measure 17 beat 2, or "20:4&" for the and of beat 4. The very end of
+/// the score is "End"
 pub fn count_label(timestamp: u32, performance: &Performance, measures: &[Measure]) -> String {
+    if timestamp >= performance.end_timestamp() {
+        return "End".into();
+    }
     let index = performance.played_measure_index(timestamp);
     let Some(played) = performance.measures().get(index) else {
         return String::new();
@@ -205,34 +237,67 @@ mod tests {
         Performance::new(measures, &TempoMap::new(120.0))
     }
 
+    use LoopPoint::{Edge, Note as N};
+
     #[test]
     fn note_loop_runs_to_the_note_after_the_last() {
         let measures = measures(&[(false, None); 4]);
         let performance = performance(&measures);
         // Dragged backwards, from beat 4& of measure 3 to beat 2 of measure 1
-        let range = LoopRange::between_notes(
-            2 * MEASURE + 7 * EIGHTH,
-            2 * EIGHTH,
+        let range = LoopRange::between(
+            N(2 * MEASURE + 7 * EIGHTH),
+            N(2 * EIGHTH),
             &performance,
             &measures,
         );
         assert_eq!(range.start, 2 * EIGHTH);
-        assert_eq!(range.last, 2 * MEASURE + 7 * EIGHTH);
         assert_eq!(range.end, 3 * MEASURE);
         assert!(range.contains(range.start));
         assert!(!range.contains(range.end));
         assert_eq!(count_label(range.start, &performance, &measures), "1:2");
-        assert_eq!(count_label(range.last, &performance, &measures), "3:4&");
+        assert_eq!(count_label(range.end, &performance, &measures), "4:1");
         assert!((range.beats(&performance, &measures) - 11.0).abs() < 1e-9);
     }
 
     #[test]
-    fn loop_on_the_last_note_ends_with_the_score() {
+    fn note_loop_mid_measure_ends_at_the_next_note() {
+        let measures = measures(&[(false, None); 2]);
+        let performance = performance(&measures);
+        let range = LoopRange::between(N(0), N(3 * EIGHTH), &performance, &measures);
+        assert_eq!(range.end, 4 * EIGHTH);
+        assert_eq!(count_label(range.end, &performance, &measures), "1:3");
+    }
+
+    #[test]
+    fn edge_at_a_bar_line_ends_the_loop_there() {
+        let measures = measures(&[(false, None); 3]);
+        let performance = performance(&measures);
+        // From the first note of measure 2 to the bar line closing it, which
+        // is where measure 3's first note is played: that note isn't looped
+        let range = LoopRange::between(N(MEASURE), Edge(2 * MEASURE), &performance, &measures);
+        assert_eq!(
+            range,
+            LoopRange {
+                start: MEASURE,
+                end: 2 * MEASURE
+            }
+        );
+        // A note at the same time as an edge comes after it
+        let range = LoopRange::between(Edge(2 * MEASURE), N(2 * MEASURE), &performance, &measures);
+        assert_eq!(range.end, 2 * MEASURE + EIGHTH);
+        // Edges in the same place still loop something
+        let range = LoopRange::between(Edge(MEASURE), Edge(MEASURE), &performance, &measures);
+        assert_eq!(range.end, MEASURE + EIGHTH);
+    }
+
+    #[test]
+    fn loop_to_the_end_of_the_score() {
         let measures = measures(&[(false, None); 2]);
         let performance = performance(&measures);
         let last = 2 * MEASURE - EIGHTH;
-        let range = LoopRange::between_notes(last, last, &performance, &measures);
+        let range = LoopRange::between(N(last), N(last), &performance, &measures);
         assert_eq!(range.end, 2 * MEASURE);
+        assert_eq!(count_label(range.end, &performance, &measures), "End");
         assert!((range.beats(&performance, &measures) - 0.5).abs() < 1e-9);
     }
 
@@ -241,9 +306,15 @@ mod tests {
         let measures = measures(&[(false, None); 4]);
         let performance = performance(&measures);
         let range = LoopRange::between_measures(2, 1, &performance, &measures).unwrap();
-        assert_eq!(range.start, MEASURE);
-        assert_eq!(range.last, 3 * MEASURE - EIGHTH);
-        assert_eq!(range.end, 3 * MEASURE);
+        assert_eq!(
+            range,
+            LoopRange {
+                start: MEASURE,
+                end: 3 * MEASURE
+            }
+        );
+        assert_eq!(count_label(range.start, &performance, &measures), "2:1");
+        assert_eq!(count_label(range.end, &performance, &measures), "4:1");
         assert_eq!(
             LoopRange::between_measures(1, 9, &performance, &measures),
             None
@@ -254,9 +325,9 @@ mod tests {
     fn coverage_is_partial_where_the_loop_starts_and_ends_mid_measure() {
         let measures = measures(&[(false, None); 4]);
         let performance = performance(&measures);
-        let range = LoopRange::between_notes(
-            2 * EIGHTH,
-            2 * MEASURE + 3 * EIGHTH,
+        let range = LoopRange::between(
+            N(2 * EIGHTH),
+            N(2 * MEASURE + 3 * EIGHTH),
             &performance,
             &measures,
         );
@@ -287,9 +358,9 @@ mod tests {
         let measures = measures(&[(false, None), (true, Some(2)), (false, None)]);
         let performance = performance(&measures);
         // From halfway through the first pass of measure 1 into the second
-        let range = LoopRange::between_notes(
-            MEASURE + 4 * EIGHTH,
-            2 * MEASURE + 3 * EIGHTH,
+        let range = LoopRange::between(
+            N(MEASURE + 4 * EIGHTH),
+            N(2 * MEASURE + 3 * EIGHTH),
             &performance,
             &measures,
         );

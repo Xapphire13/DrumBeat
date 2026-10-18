@@ -40,7 +40,7 @@ pub fn PlaybackBar() -> Element {
         let score = score.read();
         let label = |timestamp| count_label(timestamp, &score.performance, &score.measures);
         (
-            format!("Loop {} – {}", label(range.start), label(range.last)),
+            format!("Loop {} – {}", label(range.start), label(range.end)),
             format_beats(range.beats(&score.performance, &score.measures)),
         )
     });
