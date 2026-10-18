@@ -12,7 +12,6 @@ use crate::ui::{
     score::Score,
 };
 
-const FAVICON: Asset = asset!("/assets/favicon.ico");
 const MAIN_CSS: Asset = asset!("/assets/main.css");
 
 #[component]
@@ -22,7 +21,6 @@ pub fn App() -> Element {
     use_keyboard_shortcuts();
 
     rsx! {
-        document::Link { rel: "icon", href: FAVICON }
         document::Link { rel: "stylesheet", href: MAIN_CSS }
 
         Toolbar {}
