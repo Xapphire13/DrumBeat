@@ -255,9 +255,17 @@ fn converts_to_the_app_score() {
     assert_eq!(first.timestamp, 0);
     assert_eq!(first.get_length(), 3360);
     let timestamps: Vec<u32> = first.notes.iter().map(|n| n.timestamp).collect();
-    // The snare triplet, the rim shot and the kick in voice 0 (the grace
-    // hi-hat is dropped), then the crash in voice 1
+    // The snare triplet, the rim shot and the kick in voice 0, then the
+    // crash in voice 1. The grace hi-hat takes no time, so it's kept apart
     assert_eq!(timestamps, vec![0, 320, 640, 960, 0]);
+    let [grace] = first.grace_notes.as_slice() else {
+        panic!("expected one grace note, got {:?}", first.grace_notes);
+    };
+    assert_eq!(grace.midi_note, 42);
+    // Leading into the rest at 5/8, played a 64th note early
+    assert_eq!(grace.main_timestamp, 2400);
+    assert_eq!(grace.timestamp, 2400 - 60);
+    assert_eq!(grace.steps_before_main, 1);
 
     let second = &score.measures[1];
     assert_eq!(second.timestamp, 3360);

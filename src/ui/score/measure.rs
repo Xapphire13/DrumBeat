@@ -4,6 +4,7 @@ use crate::{
     data::{measure::Measure as MeasureData, note::Annotation},
     ui::score::{
         beaming::{BeamGroup, StemDirection, TupletMark, beam_groups, tuplet_marks},
+        grace_note::GraceNotes,
         note::{Note, head_half_width},
         rest::Rest,
     },
@@ -100,6 +101,12 @@ pub fn Measure(
                     })
             }
             {rests.into_iter()}
+            if !measure.grace_notes.is_empty() {
+                GraceNotes {
+                    scale: scale.clone(),
+                    grace_notes: measure.grace_notes.clone(),
+                }
+            }
             for mark in tuplets {
                 TupletNumber {
                     scale: scale.clone(),

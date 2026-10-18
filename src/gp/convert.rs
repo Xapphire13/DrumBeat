@@ -4,21 +4,23 @@ use crate::data::{
     drum_piece::DrumPiece,
     measure::Measure,
     note::{
-        Annotation, Articulation, Duration, Note, NoteValue, Rest, TICKS_PER_QUARTER,
-        Tuplet as DataTuplet,
+        Annotation, Articulation, Duration, GRACE_NOTE_LEAD, GraceNote, Note, NoteValue, Rest,
+        TICKS_PER_QUARTER, Tuplet as DataTuplet,
     },
     score::{Hairpin as DataHairpin, HairpinKind, Score},
     tempo::{TempoChange as DataTempoChange, TempoMap},
     time_signature::TimeSignature as DataTimeSignature,
 };
 
-use super::{Fraction, GpError, GpNoteValue, GpRhythm, GpScore, Hairpin, TimeSignature};
+use super::{
+    Fraction, GpBeat, GpError, GpNoteValue, GpRhythm, GpScore, GpVoice, Hairpin, TimeSignature,
+};
 
 const TICKS_PER_WHOLE: u32 = 4 * TICKS_PER_QUARTER;
 const DEFAULT_BPM: f64 = 120.0;
 
 impl GpScore {
-    /// Convert into the app's score. Grace notes are dropped
+    /// Convert into the app's score
     pub fn to_score(&self) -> Result<Score, GpError> {
         let mut measures = Vec::with_capacity(self.bars.len());
         let mut bar_timestamp = 0;
@@ -26,7 +28,9 @@ impl GpScore {
         for bar in &self.bars {
             let mut notes = vec![];
             let mut rests = vec![];
+            let mut grace_notes = vec![];
             for (voice, index) in bar.voices.iter().zip(0..) {
+                grace_notes.extend(convert_grace_notes(voice, index, bar_timestamp));
                 for beat in voice.beats.iter().filter(|beat| beat.grace.is_none()) {
                     let timestamp = bar_timestamp + to_ticks(beat.start);
                     let duration = convert_rhythm(&beat.rhythm);
@@ -52,10 +56,12 @@ impl GpScore {
                 }
             }
 
+            time_grace_notes(&mut grace_notes, &notes, &rests);
             let measure = Measure {
                 timestamp: bar_timestamp,
                 notes,
                 rests,
+                grace_notes,
                 time_signature: convert_time_signature(&bar.time_signature)?,
                 repeat_start: bar.repeat_start,
                 repeat_end: bar.repeat_end,
@@ -113,6 +119,67 @@ impl GpScore {
         }
         hairpins
     }
+}
+
+/// A voice's grace notes, each leading into the next beat that takes time.
+/// They are timed later, by `time_grace_notes`, once every voice's notes are
+/// known. Guitar Pro also has grace notes played on the beat, but drummers
+/// play flams and drags ahead of it, so they are all treated that way
+fn convert_grace_notes(voice: &GpVoice, index: u8, bar_timestamp: u32) -> Vec<GraceNote> {
+    let mut grace_notes = vec![];
+    let mut pending: Vec<&GpBeat> = vec![];
+    for beat in &voice.beats {
+        if beat.grace.is_some() {
+            pending.push(beat);
+            continue;
+        }
+        let main_timestamp = bar_timestamp + to_ticks(beat.start);
+        for (grace_beat, steps_before_main) in pending.drain(..).rev().zip(1..) {
+            grace_notes.extend(grace_beat.notes.iter().map(|note| GraceNote {
+                midi_note: note.midi_note,
+                timestamp: main_timestamp,
+                main_timestamp,
+                steps_before_main,
+                voice: index,
+                articulation: Articulation::new(note.midi_note, note.articulation.as_deref()),
+            }));
+        }
+    }
+    grace_notes
+}
+
+/// Play each run of grace notes just ahead of its main note, a
+/// `GRACE_NOTE_LEAD` apart, squeezed so the run starts after the previous
+/// note or rest in the measure
+fn time_grace_notes(grace_notes: &mut [GraceNote], notes: &[Note], rests: &[Rest]) {
+    let onsets: Vec<u32> = notes
+        .iter()
+        .map(|note| note.timestamp)
+        .chain(rests.iter().map(|rest| rest.timestamp))
+        .collect();
+    let runs: Vec<(u32, u8, u8)> = grace_notes
+        .iter()
+        .map(|grace| (grace.main_timestamp, grace.voice, grace.steps_before_main))
+        .collect();
+    for grace in grace_notes.iter_mut() {
+        let run_length = runs
+            .iter()
+            .filter(|&&(main, voice, _)| main == grace.main_timestamp && voice == grace.voice)
+            .map(|&(.., steps)| u32::from(steps))
+            .max()
+            .unwrap_or(1);
+        let lead = onsets
+            .iter()
+            .filter(|&&onset| onset < grace.main_timestamp)
+            .max()
+            .map_or(GRACE_NOTE_LEAD, |&previous| {
+                ((grace.main_timestamp - previous) / (run_length + 1)).min(GRACE_NOTE_LEAD)
+            });
+        grace.timestamp = grace
+            .main_timestamp
+            .saturating_sub(lead * u32::from(grace.steps_before_main));
+    }
+    grace_notes.sort_by_key(|grace| grace.timestamp);
 }
 
 /// Mark open and half-open hi-hats, and closed ones that follow an open one
@@ -226,6 +293,7 @@ mod tests {
                 hihat(2880, 42, "Hi-Hat (closed)"),
             ],
             rests: vec![],
+            grace_notes: vec![],
             time_signature: DataTimeSignature {
                 notes_per_measure: 4,
                 note_value: NoteValue::Quarter,
@@ -251,6 +319,38 @@ mod tests {
         assert_eq!(
             Articulation::new(53, Some("Ride (bell)")),
             Articulation::RideBell
+        );
+    }
+
+    #[test]
+    fn grace_notes_are_played_just_ahead_of_their_main_note() {
+        let note = |timestamp| Note {
+            duration: Duration::new(NoteValue::Sixteenth),
+            midi_note: 38,
+            timestamp,
+            tied: false,
+            voice: 0,
+            articulation: Articulation::Normal,
+            annotation: None,
+        };
+        let grace = |main_timestamp, steps_before_main| GraceNote {
+            midi_note: 38,
+            timestamp: main_timestamp,
+            main_timestamp,
+            steps_before_main,
+            voice: 0,
+            articulation: Articulation::Normal,
+        };
+        // A flam on a quarter, and a drag on a 32nd after a sixteenth
+        let notes = [note(0), note(960), note(1920), note(2040)];
+        let mut grace_notes = vec![grace(960, 1), grace(2040, 2), grace(2040, 1)];
+        time_grace_notes(&mut grace_notes, &notes, &[]);
+
+        let timestamps: Vec<u32> = grace_notes.iter().map(|g| g.timestamp).collect();
+        // The drag is squeezed into thirds of the 120 ticks after the sixteenth
+        assert_eq!(
+            timestamps,
+            vec![960 - GRACE_NOTE_LEAD, 2040 - 80, 2040 - 40]
         );
     }
 }

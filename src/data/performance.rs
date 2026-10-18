@@ -214,6 +214,7 @@ mod tests {
                 },
                 repeat_start,
                 rests: vec![],
+                grace_notes: vec![],
                 repeat_end,
             })
             .collect()

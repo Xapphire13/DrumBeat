@@ -1,5 +1,5 @@
 use super::{
-    note::{Note, Rest},
+    note::{GraceNote, Note, Rest},
     time_signature::TimeSignature,
 };
 
@@ -9,6 +9,8 @@ pub struct Measure {
     pub timestamp: u32,
     pub notes: Vec<Note>,
     pub rests: Vec<Rest>,
+    /// Sorted by timestamp
+    pub grace_notes: Vec<GraceNote>,
     pub time_signature: TimeSignature,
     /// A repeated passage starts at this measure
     pub repeat_start: bool,

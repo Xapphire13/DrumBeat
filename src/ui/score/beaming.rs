@@ -539,6 +539,7 @@ mod tests {
             },
             repeat_start: false,
             rests: vec![],
+            grace_notes: vec![],
             repeat_end: None,
         }
     }

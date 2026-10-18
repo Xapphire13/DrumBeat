@@ -1,5 +1,8 @@
 use crate::data::{
-    drum_piece::DrumPiece, measure::Measure, note::TICKS_PER_QUARTER, position::Position,
+    drum_piece::DrumPiece,
+    measure::Measure,
+    note::{GraceNote, TICKS_PER_QUARTER},
+    position::Position,
 };
 
 /// Space before the first note of a measure, in line heights
@@ -29,6 +32,10 @@ fn padding(measure: &Measure) -> (f32, f32) {
         };
     (left, right)
 }
+
+/// Space between grace notes, and from the last one to its main note, in
+/// glyph sizes
+pub const GRACE_NOTE_SPACING: f32 = 0.9;
 
 /// Size of note heads and other glyphs, relative to the line height. Less
 /// than one so heads half a line apart don't overlap
@@ -71,7 +78,7 @@ impl MeasureScale {
             0.0
         };
 
-        MeasureScale {
+        let mut scale = MeasureScale {
             line_height,
             unit,
             outer_x_bounds,
@@ -80,7 +87,44 @@ impl MeasureScale {
                 .into_iter()
                 .map(|(timestamp, x)| (timestamp, x_start + x * stretch))
                 .collect(),
+        };
+        scale.anchor_grace_notes(&measure.grace_notes);
+        scale
+    }
+
+    /// Anchor each grace note's played time to where it is drawn, so the
+    /// playhead crosses it as it plays. One played before the measure
+    /// starts, or that would run backwards, is left out
+    fn anchor_grace_notes(&mut self, grace_notes: &[GraceNote]) {
+        let anchors: Vec<(u32, f32)> = grace_notes
+            .iter()
+            .map(|grace| (grace.timestamp, self.get_grace_x(grace)))
+            .collect();
+        for (timestamp, x) in anchors {
+            let index = self.anchors.partition_point(|&(t, _)| t < timestamp);
+            let fits = index > 0
+                && self.anchors.get(index).is_some_and(|&(next_t, next_x)| {
+                    let (prev_t, prev_x) = self.anchors[index - 1];
+                    prev_t < timestamp && timestamp < next_t && prev_x < x && x < next_x
+                });
+            if fits {
+                self.anchors.insert(index, (timestamp, x));
+            }
         }
+    }
+
+    /// The same scale, with glyphs drawn `factor` times the size
+    pub fn with_glyph_scale(&self, factor: f32) -> MeasureScale {
+        MeasureScale {
+            unit: self.unit * factor,
+            ..self.clone()
+        }
+    }
+
+    /// Where a grace note is drawn: a little ahead of its main note
+    pub fn get_grace_x(&self, grace: &GraceNote) -> f32 {
+        self.get_x(grace.main_timestamp)
+            - f32::from(grace.steps_before_main) * GRACE_NOTE_SPACING * self.unit
     }
 
     pub fn get_y(&self, line_number: f32) -> f32 {
@@ -184,10 +228,19 @@ fn natural_offsets(measure: &Measure, unit: f32) -> Vec<(u32, f32)> {
     timestamps.sort_unstable();
     timestamps.dedup();
 
-    let mut x = 0.0;
-    let mut offsets = vec![(measure.timestamp, 0.0)];
+    // Grace notes need room ahead of their main note
+    let grace_room = |timestamp: u32| {
+        measure
+            .grace_notes
+            .iter()
+            .filter(|grace| grace.main_timestamp == timestamp)
+            .map(|grace| f32::from(grace.steps_before_main) * GRACE_NOTE_SPACING * unit)
+            .fold(0.0, f32::max)
+    };
+    let mut x = grace_room(measure.timestamp);
+    let mut offsets = vec![(measure.timestamp, x)];
     for pair in timestamps.windows(2) {
-        x += gap_width(pair[1] - pair[0], unit);
+        x += gap_width(pair[1] - pair[0], unit) + grace_room(pair[1]);
         offsets.push((pair[1], x));
     }
     offsets
@@ -232,6 +285,7 @@ mod tests {
             },
             repeat_start: false,
             rests: vec![],
+            grace_notes: vec![],
             repeat_end: None,
         }
     }
@@ -260,5 +314,36 @@ mod tests {
         // Equal gaps get equal space, and positions round trip
         assert!(((second - first) - (third - second)).abs() < 1e-3);
         assert_eq!(scale.get_timestamp(third), 3840 + 480);
+    }
+
+    #[test]
+    fn grace_notes_get_room_and_are_crossed_as_they_play() {
+        use crate::data::note::GraceNote;
+
+        let plain = measure(0, &[0, 960, 1920, 2880]);
+        let mut flams = plain.clone();
+        flams.grace_notes = [0_u32, 960]
+            .into_iter()
+            .map(|main_timestamp| GraceNote {
+                midi_note: 38,
+                timestamp: main_timestamp.saturating_sub(60),
+                main_timestamp,
+                steps_before_main: 1,
+                voice: 0,
+                articulation: Articulation::Normal,
+            })
+            .collect();
+        assert!(natural_width(&flams, 15.0) > natural_width(&plain, 15.0));
+
+        let width = natural_width(&flams, 15.0);
+        let scale = MeasureScale::new((0.0, width), 0.0, 15.0, &flams);
+        let unit = glyph_size(15.0);
+        // The first flam clears the bar line by the usual padding
+        let first = &flams.grace_notes[0];
+        assert!((scale.get_grace_x(first) - LEFT_PADDING * unit).abs() < 1e-3);
+        // The second is where the playhead is when it plays
+        let second = &flams.grace_notes[1];
+        assert!((scale.get_x(second.timestamp) - scale.get_grace_x(second)).abs() < 1e-3);
+        assert!(scale.get_grace_x(second) < scale.get_x(960));
     }
 }

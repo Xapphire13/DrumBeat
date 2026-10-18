@@ -146,6 +146,33 @@ pub struct Note {
     pub annotation: Option<Annotation>,
 }
 
+/// How far ahead of the next note each grace note is played: a 64th note
+/// (about 30 ms at 120 BPM), or less when the previous note is closer
+pub const GRACE_NOTE_LEAD: u32 = TICKS_PER_QUARTER / 16;
+
+/// A short note played just before a main note, taking no time in the bar,
+/// e.g. the soft stroke of a flam or the two of a drag
+#[derive(Clone, PartialEq, Debug)]
+pub struct GraceNote {
+    pub midi_note: u8,
+    /// When the grace note is played, in ticks since the beginning. Slightly
+    /// before `main_timestamp`
+    pub timestamp: u32,
+    /// Where the main note it leads into is written
+    pub main_timestamp: u32,
+    /// How many grace notes, counting this one, are between it and the main
+    /// note: 1 for the one right before it
+    pub steps_before_main: u8,
+    pub voice: u8,
+    pub articulation: Articulation,
+}
+
+impl GraceNote {
+    pub fn drum_piece(&self) -> Option<DrumPiece> {
+        DrumPiece::from_gm_note(self.midi_note)
+    }
+}
+
 impl Note {
     /// The physical drum piece this note is played on, if the MIDI note is a known one
     pub fn drum_piece(&self) -> Option<DrumPiece> {

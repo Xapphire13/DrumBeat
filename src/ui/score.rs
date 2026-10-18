@@ -7,6 +7,7 @@ use crate::{
 };
 
 mod beaming;
+mod grace_note;
 mod measure;
 mod measure_scale;
 mod note;
