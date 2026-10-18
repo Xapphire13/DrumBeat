@@ -307,15 +307,13 @@ body {
 
 .volume-control {
     display: flex;
-    align-items: flex-end;
+    align-items: center;
     gap: 8px;
 }
 
-/* Centred on the slider's track rather than on its labels */
 .playback-bar .mute-button {
     width: 28px;
     height: 28px;
-    margin-bottom: -11px;
     border-radius: 8px;
 }
 
@@ -323,19 +321,11 @@ body {
     width: 110px;
 }
 
-/* Short of room, volume is just the mute button, centred in the bar */
+/* Short of room, volume is just the mute button */
 @container (max-width: 1019.9px) {
     /* Scoped so it wins over .labelled-slider, which comes later */
     .volume-control .volume-slider {
         display: none;
-    }
-
-    .volume-control {
-        align-items: center;
-    }
-
-    .playback-bar .mute-button {
-        margin-bottom: 0;
     }
 }
 
