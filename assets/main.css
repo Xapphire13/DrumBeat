@@ -141,12 +141,40 @@ body {
     user-select: none;
 }
 
+/* The measure strip, with the time played and the total at its ends */
+.timeline {
+    display: flex;
+    align-items: flex-end;
+    gap: 12px;
+    margin: 8px 20px 0;
+}
+
 .measure-strip {
     display: flex;
+    flex: 1 1 0;
+    min-width: 0;
     align-items: flex-end;
     gap: 2px;
     height: 14px;
-    margin: 8px 16px 0;
+}
+
+.timeline-time {
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1;
+    white-space: nowrap;
+    color: #f4f5f7;
+    /* Sit level with the segments rather than the brackets above them */
+    margin-bottom: -3px;
+}
+
+.playback-bar .timeline-end {
+    padding: 2px 4px;
+    margin: 0 -4px -5px;
+    border-radius: 4px;
+    font: 500 12px/1 var(--mono);
+    color: #8a8f9c;
 }
 
 .measure-segment {

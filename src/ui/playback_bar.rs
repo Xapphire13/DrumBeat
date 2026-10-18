@@ -33,6 +33,28 @@ pub fn PlaybackBar() -> Element {
     };
 
     let speed = playback_manager.speed();
+    // Wall-clock time at the current speed, through every repeat. Tempo
+    // changes are already in the performance's tempo map
+    let (elapsed_seconds, total_seconds) = {
+        let performance = &score.read().performance;
+        let tempo_map = performance.tempo_map();
+        (
+            tempo_map.ticks_to_seconds(performance_timestamp) / speed,
+            tempo_map.ticks_to_seconds(performance.end_timestamp()) / speed,
+        )
+    };
+    let mut show_remaining = use_signal(|| false);
+    let (end_time, end_time_title) = if show_remaining() {
+        (
+            format!("−{}", format_time(total_seconds - elapsed_seconds)),
+            "Time remaining. Click to show the total",
+        )
+    } else {
+        (
+            format_time(total_seconds),
+            "Total time, with repeats. Click to show the time remaining",
+        )
+    };
     let speed_percent = (speed * 100.0).round();
     // How much of the slider's track is filled, as a percentage
     let slider_fill =
@@ -97,6 +119,8 @@ pub fn PlaybackBar() -> Element {
 
     rsx! {
         div { class: "playback-bar",
+            div { class: "timeline",
+            span { class: "timeline-time", title: "Time played", "{format_time(elapsed_seconds)}" }
             div { class: "measure-strip", "aria-hidden": "true",
                 for group in segments {
                     if let Some(class) = group.pass_class {
@@ -113,6 +137,13 @@ pub fn PlaybackBar() -> Element {
                         }
                     }
                 }
+            }
+            button {
+                class: "timeline-time timeline-end",
+                title: end_time_title,
+                onclick: move |_| show_remaining.toggle(),
+                "{end_time}"
+            }
             }
 
             div { class: "playback-controls",
@@ -246,6 +277,18 @@ pub fn PlaybackBar() -> Element {
     }
 }
 
+/// Seconds as m:ss, or h:mm:ss from an hour up
+fn format_time(seconds: f64) -> String {
+    // Truncated, so the elapsed time ticks over on the second
+    let seconds = seconds.max(0.0) as u64;
+    let (hours, minutes, seconds) = (seconds / 3600, seconds / 60 % 60, seconds % 60);
+    if hours > 0 {
+        format!("{hours}:{minutes:02}:{seconds:02}")
+    } else {
+        format!("{minutes}:{seconds:02}")
+    }
+}
+
 /// A run of segments in the measure strip. Each pass through a repeat is
 /// its own group, drawn with a bracket above it
 #[derive(Debug, PartialEq)]
@@ -332,6 +375,15 @@ mod tests {
                 length: 1,
             })
             .collect()
+    }
+
+    #[test]
+    fn formats_times() {
+        assert_eq!(format_time(0.0), "0:00");
+        assert_eq!(format_time(59.9), "0:59");
+        assert_eq!(format_time(127.4), "2:07");
+        assert_eq!(format_time(3725.0), "1:02:05");
+        assert_eq!(format_time(-1.0), "0:00");
     }
 
     #[test]
