@@ -325,7 +325,8 @@ body {
 
 /* Short of room, volume is just the mute button, centred in the bar */
 @container (max-width: 1019.9px) {
-    .volume-slider {
+    /* Scoped so it wins over .labelled-slider, which comes later */
+    .volume-control .volume-slider {
         display: none;
     }
 
