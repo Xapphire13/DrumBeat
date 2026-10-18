@@ -880,7 +880,9 @@ body {
     color: #f4f5f7;
 }
 
-.switch {
+/* Qualified by the element so the toolbar's and practice view's button
+   resets, which come with an element in them too, don't strip the track */
+button.switch {
     flex-shrink: 0;
     position: relative;
     width: 34px;
@@ -893,13 +895,24 @@ body {
     transition: background-color 150ms ease;
 }
 
-.toolbar .switch:hover {
-    background: #3e4352;
+button.switch:hover,
+.toolbar button.switch:hover {
+    background: #454a5b;
 }
 
-.switch.on,
-.toolbar .switch.on:hover {
+button.switch.on,
+.toolbar button.switch.on {
     background: var(--accent);
+}
+
+button.switch.on:hover,
+.toolbar button.switch.on:hover {
+    background: #9a7fff;
+}
+
+button.switch:focus-visible {
+    outline: 2px solid var(--accent-text);
+    outline-offset: 2px;
 }
 
 .switch-thumb {
@@ -939,7 +952,7 @@ body {
     user-select: none;
 }
 
-.practice button {
+:where(.practice) button {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1194,12 +1207,19 @@ body {
     margin: 0;
 }
 
+/* Switches line up with the first line of their label, not the label and
+   its description together */
 .panel-row {
     display: flex;
-    align-items: center;
+    align-items: flex-start;
     justify-content: space-between;
     gap: 12px;
     font-size: 13px;
+}
+
+.panel-row > span,
+.panel-row-text > span:first-child {
+    line-height: 20px;
 }
 
 .panel-row-text {
