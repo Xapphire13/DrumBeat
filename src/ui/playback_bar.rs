@@ -2,8 +2,8 @@ use std::cmp::Ordering;
 
 use dioxus::prelude::*;
 use lucide_dioxus::{
-    ChevronLeft, ChevronRight, Pause, Play, Repeat, RotateCcw, SkipBack, SkipForward, Volume1,
-    Volume2, VolumeX,
+    ChevronLeft, ChevronRight, ChevronUp, Gauge, Pause, Play, Repeat, RotateCcw, SkipBack,
+    SkipForward, Volume1, Volume2, VolumeX,
 };
 
 use crate::{
@@ -102,6 +102,15 @@ pub fn PlaybackBar() -> Element {
     };
 
     let handle_reset_speed = move |_: MouseEvent| playback_manager.set_speed(1.0);
+
+    // Tempo is a chip showing the speed and BPM, with the controls in a
+    // popover above it
+    let mut tempo_open = use_signal(|| false);
+    let tempo_chip_class = format!(
+        "tempo-chip{}{}",
+        if tempo_open() { " open" } else { "" },
+        if speed_percent == 100.0 { "" } else { " off-tempo" },
+    );
 
     let is_muted = playback_manager.is_muted();
     // A muted slider reads as empty, and dragging it unmutes
@@ -234,41 +243,69 @@ pub fn PlaybackBar() -> Element {
                         }
                     }
 
-                    div {
-                        class: "tempo-control",
-                        title: "Playback speed, relative to the score's tempo",
-                        label { class: "labelled-slider tempo-slider",
-                            span { class: "slider-labels",
-                                span { class: "control-label", "Tempo" }
-                                span { "{SLIDER_MIN_PERCENT}–{SLIDER_MAX_PERCENT}%" }
-                            }
-                            input {
-                                r#type: "range",
-                                style: "--fill: {slider_fill}%",
-                                min: SLIDER_MIN_PERCENT,
-                                max: SLIDER_MAX_PERCENT,
-                                step: 5,
-                                value: speed_percent,
-                                oninput: handle_speed_input,
-                            }
-                        }
+                    div { class: "tempo-control",
                         button {
-                            class: "tempo-reset",
-                            title: "Reset to the score's tempo",
-                            disabled: speed_percent == 100.0,
-                            onclick: handle_reset_speed,
-                            "{speed_percent}%"
-                            RotateCcw { size: 13 }
+                            class: "{tempo_chip_class}",
+                            title: "Playback speed, relative to the score's tempo",
+                            aria_haspopup: "dialog",
+                            aria_expanded: tempo_open(),
+                            onclick: move |_| tempo_open.set(!tempo_open()),
+                            Gauge { size: 16 }
+                            span { class: "tempo-chip-speed", "{speed_percent}%" }
+                            span { class: "tempo-chip-bpm", "{bpm} BPM" }
+                            ChevronUp { size: 14 }
                         }
-                        label { class: "bpm-field",
-                            input {
-                                r#type: "number",
-                                title: "Play at an exact tempo",
-                                min: 1,
-                                value: bpm,
-                                onchange: handle_bpm_change,
+                        if tempo_open() {
+                            // Clicking anywhere outside the popover closes it
+                            div {
+                                class: "popover-backdrop",
+                                onclick: move |_| tempo_open.set(false),
                             }
-                            "BPM"
+                            div {
+                                class: "tempo-popover",
+                                role: "dialog",
+                                aria_label: "Tempo",
+                                onkeydown: move |event: KeyboardEvent| {
+                                    if event.key().to_string() == "Escape" {
+                                        tempo_open.set(false);
+                                    }
+                                },
+                                label { class: "labelled-slider tempo-slider",
+                                    span { class: "slider-labels",
+                                        span { class: "control-label", "Tempo" }
+                                        span { "{SLIDER_MIN_PERCENT}–{SLIDER_MAX_PERCENT}%" }
+                                    }
+                                    input {
+                                        r#type: "range",
+                                        style: "--fill: {slider_fill}%",
+                                        min: SLIDER_MIN_PERCENT,
+                                        max: SLIDER_MAX_PERCENT,
+                                        step: 5,
+                                        value: speed_percent,
+                                        oninput: handle_speed_input,
+                                    }
+                                }
+                                div { class: "tempo-popover-row",
+                                    button {
+                                        class: "tempo-reset",
+                                        title: "Reset to the score's tempo",
+                                        disabled: speed_percent == 100.0,
+                                        onclick: handle_reset_speed,
+                                        "{speed_percent}%"
+                                        RotateCcw { size: 13 }
+                                    }
+                                    label { class: "bpm-field",
+                                        input {
+                                            r#type: "number",
+                                            title: "Play at an exact tempo",
+                                            min: 1,
+                                            value: bpm,
+                                            onchange: handle_bpm_change,
+                                        }
+                                        "BPM"
+                                    }
+                                }
+                            }
                         }
                     }
                 }

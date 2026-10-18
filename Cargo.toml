@@ -10,7 +10,7 @@ edition = "2024"
 cpal = "0.18.2"
 dioxus = { version = "0.7.9", features = [] }
 dioxus-desktop = "0.7.9"
-lucide-dioxus = { version = "3.58.0", features = ["arrows", "files", "layout", "multimedia"] }
+lucide-dioxus = { version = "3.58.0", features = ["arrows", "files", "layout", "multimedia", "transportation"] }
 quick-xml = { version = "0.37", features = ["serialize"] }
 rfd = { version = "0.17", default-features = false }
 serde = { version = "1", features = ["derive"] }
