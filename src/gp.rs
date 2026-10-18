@@ -74,8 +74,16 @@ pub struct GpBeat {
     pub rhythm: GpRhythm,
     /// Grace beats take no time; the next beat starts at the same offset
     pub grace: Option<Grace>,
+    /// Set while the beat is under a crescendo or decrescendo hairpin
+    pub hairpin: Option<Hairpin>,
     /// Empty for a rest
     pub notes: Vec<GpNote>,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Hairpin {
+    Crescendo,
+    Decrescendo,
 }
 
 #[derive(Clone, Copy, PartialEq, Debug)]
@@ -311,10 +319,16 @@ pub fn parse_gpif(xml: &str) -> Result<GpScore, GpError> {
                 None => vec![],
             };
             let duration = rhythm.duration();
+            let hairpin = match beat.hairpin.as_deref() {
+                Some("Crescendo") => Some(Hairpin::Crescendo),
+                Some("Decrescendo" | "Diminuendo") => Some(Hairpin::Decrescendo),
+                _ => None,
+            };
             beats.push(GpBeat {
                 start,
                 rhythm,
                 grace,
+                hairpin,
                 notes,
             });
             if grace.is_none() {

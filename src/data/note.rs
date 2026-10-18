@@ -73,6 +73,62 @@ impl Duration {
     }
 }
 
+/// How a note is played, where that changes how it is drawn
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Articulation {
+    Normal,
+    HihatClosed,
+    HihatHalfOpen,
+    HihatOpen,
+    RideBell,
+}
+
+impl Articulation {
+    /// Work out the articulation from the General MIDI note, and Guitar Pro's
+    /// name for the sound when there is one, e.g. "Hi-Hat (open)"
+    pub fn new(midi_note: u8, name: Option<&str>) -> Self {
+        let name = name.map(str::to_lowercase).unwrap_or_default();
+        if name.contains("bell") || (name.is_empty() && midi_note == 53) {
+            Articulation::RideBell
+        } else if name.contains("hi-hat") && name.contains("half") {
+            Articulation::HihatHalfOpen
+        } else if (name.contains("hi-hat") && name.contains("open"))
+            || (name.is_empty() && midi_note == 46)
+        {
+            Articulation::HihatOpen
+        } else if (name.contains("hi-hat") && name.contains("closed"))
+            || (name.is_empty() && midi_note == 42)
+        {
+            Articulation::HihatClosed
+        } else {
+            Articulation::Normal
+        }
+    }
+
+    pub fn is_open_hihat(self) -> bool {
+        matches!(self, Articulation::HihatOpen | Articulation::HihatHalfOpen)
+    }
+}
+
+/// A sign drawn over a note
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Annotation {
+    /// "o": the hi-hat is played open (the pedal lifts)
+    Open,
+    /// A circle with a slash: the hi-hat is played half open
+    HalfOpen,
+    /// "+": the hi-hat closes again after being open
+    Closed,
+}
+
+#[derive(Clone, PartialEq, Debug)]
+pub struct Rest {
+    pub duration: Duration,
+    /// Where the rest is within the score, measured in ticks since the beginning
+    pub timestamp: u32,
+    pub voice: u8,
+}
+
 #[derive(Clone, PartialEq, Debug)]
 pub struct Note {
     pub duration: Duration,
@@ -83,6 +139,11 @@ pub struct Note {
     pub timestamp: u32,
     /// True when this note continues a tied note, so it should not be played
     pub tied: bool,
+    /// Which voice the note is in. Voice 0 is drawn with stems up, the others
+    /// (usually the feet) with stems down
+    pub voice: u8,
+    pub articulation: Articulation,
+    pub annotation: Option<Annotation>,
 }
 
 impl Note {

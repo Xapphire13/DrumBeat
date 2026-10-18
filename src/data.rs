@@ -1,6 +1,7 @@
 pub mod drum_piece;
 pub mod measure;
 pub mod note;
+pub mod performance;
 pub mod position;
 pub mod score;
 pub mod tempo;

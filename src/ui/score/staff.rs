@@ -1,7 +1,10 @@
 use dioxus::prelude::*;
 
 use crate::{
-    data::measure::Measure as MeasureData,
+    data::{
+        measure::Measure as MeasureData,
+        score::{Hairpin, HairpinKind},
+    },
     ui::{
         hooks::{MousePositionData, use_mouse_position},
         providers::{playback_manager::use_playback_manager, score_manager::use_score_manager},
@@ -22,16 +25,39 @@ mod phantom_playhead;
 mod playhead;
 mod staff_lines;
 
-const NUMBER_OF_LINES: u8 = 5;
+/// The highest and lowest line numbers drawn, leaving room above the staff
+/// for upward stems, beams and measure numbers, and below it for downward
+/// stems and beams. The staff itself spans lines -0.5 to 3.5
+const HIGHEST_LINE: f32 = 7.0;
+const LOWEST_LINE: f32 = -3.5;
+/// Top and bottom staff lines
+const TOP_STAFF_LINE: f32 = 3.5;
+const BOTTOM_STAFF_LINE: f32 = -0.5;
 
-pub fn line_height(staff_height: f32) -> f32 {
-    staff_height / 8.
+/// Extra room below a staff with hairpins, in lines
+const HAIRPIN_BAND: f32 = 1.5;
+/// How wide a hairpin opens, in lines
+const HAIRPIN_OPENING: f32 = 0.9;
+
+/// The staff's height in lines
+fn height_in_lines(has_hairpins: bool) -> f32 {
+    HIGHEST_LINE - LOWEST_LINE + if has_hairpins { HAIRPIN_BAND } else { 0.0 }
+}
+
+/// Height of a staff drawn with the given line height
+pub fn height(line_height: f32, has_hairpins: bool) -> f32 {
+    height_in_lines(has_hairpins) * line_height
 }
 
 #[component]
 pub fn Staff(dimensions: StaffDimensions, layout: StaffLayout) -> Element {
     let StaffDimensions { width, height } = dimensions.clone();
-    let StaffLayout { measures, widths } = layout;
+    let StaffLayout {
+        first_measure_number,
+        measures,
+        widths,
+        hairpins,
+    } = layout;
     // A short last staff doesn't fill the whole width
     let content_width: f32 = widths.iter().sum();
     let mut playback_manager = use_playback_manager();
@@ -41,8 +67,9 @@ pub fn Staff(dimensions: StaffDimensions, layout: StaffLayout) -> Element {
         handle_on_mouse_move,
         handle_on_mouse_leave,
     } = use_mouse_position();
-    let line_height = line_height(height);
-    let scales = use_scales(&measures, &widths, height, line_height);
+    let line_height = height / height_in_lines(!hairpins.is_empty());
+    let baseline = HIGHEST_LINE * line_height;
+    let scales = use_scales(&measures, &widths, baseline, line_height);
     let phantom_playhead_data = use_phantom_playhead_data(&mouse_position, &scales(), &measures);
 
     let handle_on_click = {
@@ -63,13 +90,14 @@ pub fn Staff(dimensions: StaffDimensions, layout: StaffLayout) -> Element {
             style: "height: {height}px",
 
             svg { class: "staff", width: "{width}px", height: "{height}px",
-                StaffLines {
-                    line_height,
-                    number_of_lines: NUMBER_OF_LINES,
-                    staff_dimensions: StaffDimensions {
-                        width: content_width,
-                        height,
-                    },
+                StaffLines { line_height, baseline, width: content_width }
+
+                for hairpin in hairpins {
+                    HairpinMark {
+                        hairpin,
+                        measures: measures.clone(),
+                        scales: scales(),
+                    }
                 }
 
                 Playhead {
@@ -85,32 +113,54 @@ pub fn Staff(dimensions: StaffDimensions, layout: StaffLayout) -> Element {
                 // Measures
                 {
                     let number_of_measures = measures.len();
+                    let performance = score.read().performance.clone();
                     measures
                         .into_iter()
                         .enumerate()
                         .filter_map(move |(i, measure)| {
                             let scale = scales.get(i)?;
-                            let outer_left_bound = scale.outer_x_bounds.0;
+                            let (left, right) = scale.outer_x_bounds;
+                            let top = scale.get_y(TOP_STAFF_LINE);
+                            let bottom = scale.get_y(BOTTOM_STAFF_LINE);
+                            let measure_number = format_measure_numbers(
+                                &performance.measure_numbers(first_measure_number - 1 + i),
+                            );
                             Some(rsx! {
                                 // Draw vertical line between measures
                                 if i > 0 {
                                     line {
-                                        x1: "{outer_left_bound}",
-                                        y1: "{scale.get_y(-0.5)}",
-                                        x2: "{outer_left_bound}",
-                                        y2: "{scale.get_y(3.5)}",
+                                        x1: "{left}",
+                                        y1: "{bottom}",
+                                        x2: "{left}",
+                                        y2: "{top}",
                                     }
                                 }
                                 // Close the staff after its last measure
                                 if i + 1 == number_of_measures {
                                     line {
-                                        x1: "{scale.outer_x_bounds.1 - 0.5}",
-                                        y1: "{scale.get_y(-0.5)}",
-                                        x2: "{scale.outer_x_bounds.1 - 0.5}",
-                                        y2: "{scale.get_y(3.5)}",
+                                        x1: "{right - 0.5}",
+                                        y1: "{bottom}",
+                                        x2: "{right - 0.5}",
+                                        y2: "{top}",
                                     }
                                 }
-                                Measure { scale: scale.clone(), notes: measure.notes }
+                                text {
+                                    class: "measure-number-label",
+                                    x: left + 2.,
+                                    y: top - 0.35 * scale.unit,
+                                    font_size: 0.75 * scale.unit,
+                                    "{measure_number}"
+                                }
+                                RepeatSigns {
+                                    scale: scale.clone(),
+                                    repeat_start: measure.repeat_start,
+                                    repeat_end: measure.repeat_end,
+                                }
+                                Measure {
+                                    scale: scale.clone(),
+                                    measure,
+                                    stem_bounds: (LOWEST_LINE + 0.3, HIGHEST_LINE - 0.3),
+                                }
                             })
                         })
                 }
@@ -119,15 +169,37 @@ pub fn Staff(dimensions: StaffDimensions, layout: StaffLayout) -> Element {
     }
 }
 
+/// Show the numbers a measure is played as, e.g. "5" or, when it repeats,
+/// "1–4" or "97, 99, 101"
+fn format_measure_numbers(numbers: &[usize]) -> String {
+    let mut runs: Vec<(usize, usize)> = vec![];
+    for &number in numbers {
+        match runs.last_mut() {
+            Some((_, last)) if *last + 1 == number => *last = number,
+            _ => runs.push((number, number)),
+        }
+    }
+    runs.iter()
+        .map(|&(first, last)| {
+            if first == last {
+                format!("{first}")
+            } else {
+                format!("{first}–{last}")
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
 fn use_scales(
     measures: &Vec<MeasureData>,
     widths: &Vec<f32>,
-    height: f32,
+    baseline: f32,
     line_height: f32,
 ) -> Memo<Vec<MeasureScale>> {
     use_memo(use_reactive(
-        (measures, widths, &height),
-        move |(measures, widths, height)| {
+        (measures, widths, &baseline),
+        move |(measures, widths, baseline)| {
             let mut left_bound = 0.0;
             measures
                 .iter()
@@ -136,7 +208,7 @@ fn use_scales(
                     let right_bound = left_bound + width;
                     let scale = MeasureScale::new(
                         (left_bound, right_bound),
-                        height - 1.5 * line_height,
+                        baseline,
                         line_height,
                         measure,
                     );
@@ -147,4 +219,125 @@ fn use_scales(
                 .collect::<Vec<MeasureScale>>()
         },
     ))
+}
+
+/// A crescendo or decrescendo wedge below the staff, for the part of it on
+/// this staff
+#[component]
+fn HairpinMark(hairpin: Hairpin, measures: Vec<MeasureData>, scales: Vec<MeasureScale>) -> Element {
+    let (Some(first), Some(last), Some(scale)) =
+        (measures.first(), measures.last(), scales.first())
+    else {
+        return rsx! {};
+    };
+    let x_at = |timestamp: u32| {
+        measures
+            .iter()
+            .zip(&scales)
+            .find(|(measure, _)| timestamp <= measure.end_timestamp())
+            .map_or(0.0, |(_, scale)| scale.get_x(timestamp))
+    };
+    let start = hairpin.start.max(first.timestamp);
+    let end = hairpin.end.min(last.end_timestamp());
+    // How far open the wedge is at a timestamp
+    let half_opening = |timestamp: u32| {
+        let progress = (timestamp - hairpin.start) as f32 / (hairpin.end - hairpin.start) as f32;
+        let open = match hairpin.kind {
+            HairpinKind::Crescendo => progress,
+            HairpinKind::Decrescendo => 1.0 - progress,
+        };
+        open * HAIRPIN_OPENING * scale.line_height / 2.
+    };
+    let (x1, x2) = (x_at(start), x_at(end));
+    let (open1, open2) = (half_opening(start), half_opening(end));
+    let y = scale.get_y(LOWEST_LINE - HAIRPIN_BAND / 2.);
+
+    rsx! {
+        polyline {
+            points: "{x2},{y - open2} {x1},{y - open1}",
+            fill: "none",
+            stroke: "black",
+            stroke_width: 1.2,
+        }
+        polyline {
+            points: "{x2},{y + open2} {x1},{y + open1}",
+            fill: "none",
+            stroke: "black",
+            stroke_width: 1.2,
+        }
+    }
+}
+
+/// Thick and thin bar lines with dots for a repeated passage's start and end,
+/// and the number of times it is played when that isn't the usual twice
+#[component]
+fn RepeatSigns(scale: MeasureScale, repeat_start: bool, repeat_end: Option<u32>) -> Element {
+    let unit = scale.unit;
+    let (left, right) = scale.outer_x_bounds;
+    let top = scale.get_y(TOP_STAFF_LINE);
+    let bottom = scale.get_y(BOTTOM_STAFF_LINE);
+    let dot_radius = 0.2 * unit;
+    // The dots sit in the two middle spaces of the staff
+    let dot_ys = [scale.get_y(1.0), scale.get_y(2.0)];
+
+    rsx! {
+        if repeat_start {
+            line {
+                x1: left + 2.,
+                y1: bottom,
+                x2: left + 2.,
+                y2: top,
+                stroke_width: 3,
+            }
+            for y in dot_ys {
+                circle {
+                    cx: left + 0.6 * unit,
+                    cy: y,
+                    r: dot_radius,
+                    fill: "black",
+                    stroke: "none",
+                }
+            }
+        }
+        if let Some(count) = repeat_end {
+            line {
+                x1: right - 2.,
+                y1: bottom,
+                x2: right - 2.,
+                y2: top,
+                stroke_width: 3,
+            }
+            for y in dot_ys {
+                circle {
+                    cx: right - 0.6 * unit,
+                    cy: y,
+                    r: dot_radius,
+                    fill: "black",
+                    stroke: "none",
+                }
+            }
+            if count != 2 {
+                text {
+                    class: "repeat-count",
+                    x: right - 0.9 * unit,
+                    y: top - 0.35 * unit,
+                    font_size: 0.75 * unit,
+                    text_anchor: "end",
+                    "×{count}"
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn measure_numbers_collapse_into_ranges() {
+        assert_eq!(format_measure_numbers(&[5]), "5");
+        assert_eq!(format_measure_numbers(&[1, 2, 3, 4]), "1–4");
+        assert_eq!(format_measure_numbers(&[97, 99, 101]), "97, 99, 101");
+    }
 }

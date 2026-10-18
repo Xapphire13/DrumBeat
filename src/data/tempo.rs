@@ -36,6 +36,15 @@ impl TempoMap {
         &self.changes
     }
 
+    /// The tempo in effect at `timestamp`
+    pub fn bpm_at(&self, timestamp: u32) -> f64 {
+        self.changes
+            .iter()
+            .take_while(|change| change.timestamp <= timestamp)
+            .last()
+            .map_or(self.changes[0].bpm, |change| change.bpm)
+    }
+
     /// Convert a timestamp in ticks to seconds since the beginning of the score
     pub fn ticks_to_seconds(&self, timestamp: u32) -> f64 {
         let mut seconds = 0.0;

@@ -1,18 +1,49 @@
 use crate::data::{
-    drum_piece::DrumPiece,
-    measure::Measure,
-    note::{NoteValue, TICKS_PER_QUARTER},
-    position::Position,
+    drum_piece::DrumPiece, measure::Measure, note::TICKS_PER_QUARTER, position::Position,
 };
 
 /// Space before the first note of a measure, in line heights
 pub const LEFT_PADDING: f32 = 1.5;
 /// Space after the last note's spacing in a measure, in line heights
 pub const RIGHT_PADDING: f32 = 0.5;
+/// Extra space at the end of a measure that closes a repeat, for its dots
+/// and play count
+const REPEAT_END_PADDING: f32 = 2.0;
+/// Extra space at the start of a measure that opens a repeat, for its dots
+const REPEAT_START_PADDING: f32 = 0.5;
+
+/// Space before the first note and after the last note's spacing, in line
+/// heights
+fn padding(measure: &Measure) -> (f32, f32) {
+    let left = LEFT_PADDING
+        + if measure.repeat_start {
+            REPEAT_START_PADDING
+        } else {
+            0.0
+        };
+    let right = RIGHT_PADDING
+        + if measure.repeat_end.is_some() {
+            REPEAT_END_PADDING
+        } else {
+            0.0
+        };
+    (left, right)
+}
+
+/// Size of note heads and other glyphs, relative to the line height. Less
+/// than one so heads half a line apart don't overlap
+const GLYPH_SCALE: f32 = 0.72;
+
+/// The size glyphs are drawn at, and the unit for horizontal spacing
+pub fn glyph_size(line_height: f32) -> f32 {
+    GLYPH_SCALE * line_height
+}
 
 #[derive(Clone, PartialEq)]
 pub struct MeasureScale {
     pub line_height: f32,
+    /// See `glyph_size`
+    pub unit: f32,
     pub outer_x_bounds: (f32, f32),
 
     y_baseline: f32,
@@ -28,9 +59,11 @@ impl MeasureScale {
         line_height: f32,
         measure: &Measure,
     ) -> MeasureScale {
-        let x_start = outer_x_bounds.0 + LEFT_PADDING * line_height;
-        let x_end = outer_x_bounds.1 - RIGHT_PADDING * line_height;
-        let natural_offsets = natural_offsets(measure, line_height);
+        let (left_padding, right_padding) = padding(measure);
+        let unit = glyph_size(line_height);
+        let x_start = outer_x_bounds.0 + left_padding * unit;
+        let x_end = outer_x_bounds.1 - right_padding * unit;
+        let natural_offsets = natural_offsets(measure, unit);
         let natural_width = natural_offsets.last().map_or(0.0, |&(_, x)| x);
         let stretch = if natural_width > 0.0 {
             (x_end - x_start) / natural_width
@@ -40,6 +73,7 @@ impl MeasureScale {
 
         MeasureScale {
             line_height,
+            unit,
             outer_x_bounds,
             y_baseline,
             anchors: natural_offsets
@@ -102,16 +136,8 @@ impl MeasureScale {
         }
     }
 
-    pub fn get_beam_line_number(&self, note_value: NoteValue) -> f32 {
-        match note_value {
-            NoteValue::Whole | NoteValue::Half | NoteValue::Quarter | NoteValue::Eighth => 6.,
-            NoteValue::Sixteenth => 6.5,
-            NoteValue::ThirtySecond => 7.,
-            NoteValue::SixtyFourth => 7.5,
-        }
-    }
-
-    fn get_line_number(drum_piece: DrumPiece) -> f32 {
+    /// The staff line a drum piece's note head is drawn on
+    pub fn get_line_number(drum_piece: DrumPiece) -> f32 {
         match drum_piece {
             DrumPiece::HihatPedal => -1.0,
             DrumPiece::Kick => 0.0,
@@ -131,16 +157,18 @@ impl MeasureScale {
 /// The width a measure needs to fit its notes comfortably, before it is
 /// stretched to fill a staff
 pub fn natural_width(measure: &Measure, line_height: f32) -> f32 {
-    let notes_width = natural_offsets(measure, line_height)
+    let unit = glyph_size(line_height);
+    let notes_width = natural_offsets(measure, unit)
         .last()
         .map_or(0.0, |&(_, x)| x);
 
-    (LEFT_PADDING + RIGHT_PADDING) * line_height + notes_width
+    let (left_padding, right_padding) = padding(measure);
+    (left_padding + right_padding) * unit + notes_width
 }
 
-/// `(timestamp, x offset)` for the measure start, every note onset and the
-/// measure end, where each gap between onsets gets space based on its length
-fn natural_offsets(measure: &Measure, line_height: f32) -> Vec<(u32, f32)> {
+/// `(timestamp, x offset)` for the measure start, every note and rest onset
+/// and the measure end, where each gap between onsets gets space based on its length
+fn natural_offsets(measure: &Measure, unit: f32) -> Vec<(u32, f32)> {
     let end = measure.timestamp + measure.get_length();
     let mut timestamps: Vec<u32> = std::iter::once(measure.timestamp)
         .chain(
@@ -148,6 +176,7 @@ fn natural_offsets(measure: &Measure, line_height: f32) -> Vec<(u32, f32)> {
                 .notes
                 .iter()
                 .map(|note| note.timestamp)
+                .chain(measure.rests.iter().map(|rest| rest.timestamp))
                 .filter(|&timestamp| timestamp > measure.timestamp && timestamp < end),
         )
         .chain(std::iter::once(end))
@@ -158,7 +187,7 @@ fn natural_offsets(measure: &Measure, line_height: f32) -> Vec<(u32, f32)> {
     let mut x = 0.0;
     let mut offsets = vec![(measure.timestamp, 0.0)];
     for pair in timestamps.windows(2) {
-        x += gap_width(pair[1] - pair[0], line_height);
+        x += gap_width(pair[1] - pair[0], unit);
         offsets.push((pair[1], x));
     }
     offsets
@@ -166,10 +195,10 @@ fn natural_offsets(measure: &Measure, line_height: f32) -> Vec<(u32, f32)> {
 
 /// Space for a gap between note onsets. Longer gaps get more space, but
 /// grow logarithmically so long notes don't take over the staff
-fn gap_width(gap: u32, line_height: f32) -> f32 {
+fn gap_width(gap: u32, unit: f32) -> f32 {
     let sixteenths = gap as f32 / (TICKS_PER_QUARTER / 4) as f32;
-    let sixteenth_width = 1.6 * line_height;
-    let min_width = 1.2 * line_height;
+    let sixteenth_width = 1.6 * unit;
+    let min_width = 1.2 * unit;
 
     (sixteenth_width * (1.0 + 0.6 * sixteenths.log2())).max(min_width)
 }
@@ -178,7 +207,7 @@ fn gap_width(gap: u32, line_height: f32) -> f32 {
 mod tests {
     use super::*;
     use crate::data::{
-        note::{Duration, Note},
+        note::{Articulation, Duration, Note, NoteValue},
         time_signature::TimeSignature,
     };
 
@@ -192,12 +221,18 @@ mod tests {
                     midi_note: 38,
                     timestamp: timestamp + onset,
                     tied: false,
+                    voice: 0,
+                    articulation: Articulation::Normal,
+                    annotation: None,
                 })
                 .collect(),
             time_signature: TimeSignature {
                 notes_per_measure: 4,
                 note_value: NoteValue::Quarter,
             },
+            repeat_start: false,
+            rests: vec![],
+            repeat_end: None,
         }
     }
 
@@ -219,8 +254,9 @@ mod tests {
         let first = scale.get_x(3840);
         let second = scale.get_x(3840 + 240);
         let third = scale.get_x(3840 + 480);
-        assert!((first - (100.0 + LEFT_PADDING * 15.0)).abs() < 1e-3);
-        assert!((scale.get_x(3840 + 3840) - (400.0 - RIGHT_PADDING * 15.0)).abs() < 1e-3);
+        let unit = glyph_size(15.0);
+        assert!((first - (100.0 + LEFT_PADDING * unit)).abs() < 1e-3);
+        assert!((scale.get_x(3840 + 3840) - (400.0 - RIGHT_PADDING * unit)).abs() < 1e-3);
         // Equal gaps get equal space, and positions round trip
         assert!(((second - first) - (third - second)).abs() < 1e-3);
         assert_eq!(scale.get_timestamp(third), 3840 + 480);

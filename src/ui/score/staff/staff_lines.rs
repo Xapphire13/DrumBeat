@@ -1,23 +1,16 @@
 use dioxus::prelude::*;
 
-use crate::ui::score::StaffDimensions;
-
+/// The five staff lines, which sit on line numbers -0.5 to 3.5
 #[component]
-pub fn StaffLines(
-    line_height: f32,
-    number_of_lines: u8,
-    staff_dimensions: StaffDimensions,
-) -> Element {
-    let StaffDimensions { width, .. } = staff_dimensions;
-
+pub fn StaffLines(line_height: f32, baseline: f32, width: f32) -> Element {
     rsx! {
         g {
-            for line_number in 1..=number_of_lines {
+            for line_number in [-0.5f32, 0.5, 1.5, 2.5, 3.5] {
                 line {
                     x1: "0",
-                    y1: "{(2. * line_height) + (line_number as f32)*line_height}",
+                    y1: "{baseline - line_number * line_height}",
                     x2: "{width}",
-                    y2: "{(2. * line_height) + (line_number as f32)*line_height}",
+                    y2: "{baseline - line_number * line_height}",
                 }
             }
         }

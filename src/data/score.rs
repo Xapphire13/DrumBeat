@@ -1,41 +1,45 @@
-use super::{measure::Measure, tempo::TempoMap};
+use super::{measure::Measure, performance::Performance, tempo::TempoMap};
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum HairpinKind {
+    Crescendo,
+    Decrescendo,
+}
+
+/// A crescendo or decrescendo, which can span several measures
+#[derive(Clone, PartialEq, Debug)]
+pub struct Hairpin {
+    pub kind: HairpinKind,
+    /// Where the hairpin starts and ends, in ticks since the beginning
+    pub start: u32,
+    pub end: u32,
+}
 
 #[derive(Clone, PartialEq)]
 pub struct Score {
     pub title: String,
     pub measures: Vec<Measure>,
+    /// Tempo changes on the written timeline
     pub tempo_map: TempoMap,
+    /// How the score is played, with repeats expanded
+    pub performance: Performance,
+    /// Sorted by start
+    pub hairpins: Vec<Hairpin>,
 }
 
 impl Score {
-    pub fn empty() -> Self {
+    pub fn new(title: String, measures: Vec<Measure>, tempo_map: TempoMap) -> Self {
+        let performance = Performance::new(&measures, &tempo_map);
         Self {
-            title: String::new(),
-            measures: vec![],
-            tempo_map: TempoMap::new(120.0),
+            title,
+            measures,
+            tempo_map,
+            performance,
+            hairpins: vec![],
         }
     }
 
-    /// The timestamp where the last measure ends
-    pub fn end_timestamp(&self) -> u32 {
-        self.measures
-            .last()
-            .map_or(0, |measure| measure.timestamp + measure.get_length())
-    }
-
-    /// Get the sorted, unique timestamps of every note that is played (tied
-    /// continuations are skipped)
-    pub fn get_note_timestamps(&self) -> Vec<u32> {
-        let mut timestamps: Vec<u32> = self
-            .measures
-            .iter()
-            .flat_map(|measure| &measure.notes)
-            .filter(|note| !note.tied)
-            .map(|note| note.timestamp)
-            .collect();
-
-        timestamps.sort_unstable();
-        timestamps.dedup();
-        timestamps
+    pub fn empty() -> Self {
+        Self::new(String::new(), vec![], TempoMap::new(120.0))
     }
 }

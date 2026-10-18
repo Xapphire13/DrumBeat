@@ -2,16 +2,19 @@ use dioxus::prelude::*;
 use staff::Staff;
 
 use crate::{
-    data::measure::Measure,
+    data::{measure::Measure, score::Hairpin},
     ui::{hooks::use_size, playback_bar::PlaybackBar, providers::score_manager::use_score_manager},
 };
 
+mod beaming;
 mod measure;
 mod measure_scale;
 mod note;
+mod rest;
 mod staff;
 
-const STAFF_HEIGHT: f32 = 120.0;
+/// Distance between staff lines
+const LINE_HEIGHT: f32 = 20.0;
 
 #[derive(PartialEq, Clone)]
 pub struct StaffDimensions {
@@ -22,8 +25,12 @@ pub struct StaffDimensions {
 /// The measures on one staff, with the width each one is drawn at
 #[derive(PartialEq, Clone)]
 pub struct StaffLayout {
+    /// The number shown for the staff's first measure, counting from 1
+    first_measure_number: usize,
     measures: Vec<Measure>,
     widths: Vec<f32>,
+    /// The hairpins that reach into this staff
+    hairpins: Vec<Hairpin>,
 }
 
 #[component]
@@ -32,7 +39,21 @@ pub fn Score() -> Element {
     let score = use_score_manager();
     let width = width as f32;
     let staves = use_memo(use_reactive((&width,), move |(width,)| {
-        layout_staves(&score().measures, width, staff::line_height(STAFF_HEIGHT))
+        let score = score.read();
+        let mut staves = layout_staves(&score.measures, width, LINE_HEIGHT);
+        for staff in &mut staves {
+            let (Some(first), Some(last)) = (staff.measures.first(), staff.measures.last()) else {
+                continue;
+            };
+            let (start, end) = (first.timestamp, last.end_timestamp());
+            staff.hairpins = score
+                .hairpins
+                .iter()
+                .filter(|hairpin| hairpin.start < end && hairpin.end > start)
+                .cloned()
+                .collect();
+        }
+        staves
     }));
 
     rsx! {
@@ -47,7 +68,7 @@ pub fn Score() -> Element {
                     Staff {
                         dimensions: StaffDimensions {
                             width,
-                            height: STAFF_HEIGHT,
+                            height: staff::height(LINE_HEIGHT, !layout.hairpins.is_empty()),
                         },
                         layout,
                     }
@@ -71,22 +92,19 @@ fn layout_staves(measures: &[Measure], width: f32, line_height: f32) -> Vec<Staf
     }
 
     let mut staves = vec![];
-    let mut current = StaffLayout {
+    let empty_staff = |first_measure_number| StaffLayout {
+        first_measure_number,
         measures: vec![],
         widths: vec![],
+        hairpins: vec![],
     };
+    let mut current = empty_staff(1);
     let mut current_width = 0.0;
 
-    for measure in measures {
+    for (i, measure) in measures.iter().enumerate() {
         let measure_width = measure_scale::natural_width(measure, line_height);
         if !current.measures.is_empty() && current_width + measure_width > width {
-            staves.push(std::mem::replace(
-                &mut current,
-                StaffLayout {
-                    measures: vec![],
-                    widths: vec![],
-                },
-            ));
+            staves.push(std::mem::replace(&mut current, empty_staff(i + 1)));
             current_width = 0.0;
         }
         current.measures.push(measure.clone());

@@ -188,6 +188,8 @@ pub struct Beat {
     pub notes: Option<String>,
     /// "BeforeBeat" or "OnBeat"
     pub grace_notes: Option<String>,
+    /// "Crescendo" or "Decrescendo" while the beat is under a hairpin
+    pub hairpin: Option<String>,
 }
 
 #[derive(Deserialize, Debug)]

@@ -269,3 +269,22 @@ fn converts_to_the_app_score() {
     assert_eq!(changes[1].timestamp, 3360 + 1920);
     assert!((changes[1].bpm - 90.0).abs() < 1e-9);
 }
+
+#[test]
+fn joins_beats_under_a_hairpin() {
+    let xml = GPIF
+        .replace(
+            r#"<Beat id="0"><Rhythm"#,
+            r#"<Beat id="0"><Hairpin>Crescendo</Hairpin><Rhythm"#,
+        )
+        .replace(
+            r#"<Beat id="1"><Rhythm"#,
+            r#"<Beat id="1"><Hairpin>Crescendo</Hairpin><Rhythm"#,
+        );
+    let score = parse_gpif(&xml).unwrap().to_score().unwrap();
+    assert_eq!(score.hairpins.len(), 1);
+    let hairpin = &score.hairpins[0];
+    assert_eq!(hairpin.kind, crate::data::score::HairpinKind::Crescendo);
+    // The whole snare triplet, since its last two notes share beat 1
+    assert_eq!((hairpin.start, hairpin.end), (0, 960));
+}

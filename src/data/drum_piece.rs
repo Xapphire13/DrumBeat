@@ -40,6 +40,12 @@ impl DrumPiece {
         }
     }
 
+    /// Whether the piece is played with the feet, so it is drawn with its
+    /// stem down
+    pub fn is_played_with_feet(self) -> bool {
+        matches!(self, DrumPiece::Kick | DrumPiece::HihatPedal)
+    }
+
     /// Whether the piece is drawn with an X note head
     pub fn is_cymbal(self) -> bool {
         matches!(

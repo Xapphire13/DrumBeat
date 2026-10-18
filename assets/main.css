@@ -81,3 +81,49 @@ body {
 .measure-number {
     width: 25px;
 }
+
+.repeat-pass {
+    margin-left: 6px;
+    font-variant-numeric: tabular-nums;
+}
+
+.tempo-control {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: 12px;
+}
+
+.tempo-reset {
+    min-width: 52px;
+    font-variant-numeric: tabular-nums;
+}
+
+.tempo-bpm {
+    min-width: 56px;
+    font-variant-numeric: tabular-nums;
+}
+
+.staff text {
+    stroke: none;
+    fill: #555;
+    font-family: -apple-system, "Segoe UI", sans-serif;
+    user-select: none;
+}
+
+.staff .repeat-count {
+    fill: black;
+    font-weight: 600;
+}
+
+.staff .tuplet-number {
+    fill: black;
+    font-style: italic;
+    font-weight: 600;
+}
+
+.bpm-input {
+    width: 52px;
+    margin-left: 4px;
+    font-variant-numeric: tabular-nums;
+}
