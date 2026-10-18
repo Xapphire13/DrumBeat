@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use dioxus::prelude::*;
+use dioxus::{core::Task, html::input_data::MouseButton, prelude::*};
 use lucide_dioxus::{Minus, Play, Plus, Square};
 
 use crate::{
@@ -26,7 +26,15 @@ const TAP_WINDOW: Duration = Duration::from_millis(2500);
 const MAX_TAPS: usize = 5;
 
 /// The tempo slider moves in steps this big; − and + fine-tune it
-const SLIDER_STEP: u32 = 5;
+const SLIDER_STEP: u32 = 10;
+
+/// Holding − or + steps the tempo this far at a time
+const HOLD_STEP: u32 = 5;
+
+/// How long − or + is held before it starts stepping, and how often it steps
+/// after that
+const HOLD_DELAY: Duration = Duration::from_millis(400);
+const HOLD_REPEAT: Duration = Duration::from_millis(200);
 
 /// The standalone metronome: the beat and tempo on a stage, with its
 /// settings in a panel beside it
@@ -106,26 +114,12 @@ fn Stage() -> Element {
             p { class: "stage-caption", "{caption}" }
 
             div { class: "bpm-row",
-                button {
-                    class: "bpm-step",
-                    title: "Slower",
-                    aria_label: "Slower",
-                    disabled: bpm <= MIN_BPM,
-                    onclick: move |_| practice.set_bpm(bpm.saturating_sub(1)),
-                    Minus { size: 20 }
-                }
+                StepButton { faster: false, disabled: bpm <= MIN_BPM }
                 div { class: "bpm-readout",
                     span { class: "bpm-value", "{bpm}" }
                     span { class: "control-label", "BPM" }
                 }
-                button {
-                    class: "bpm-step",
-                    title: "Faster",
-                    aria_label: "Faster",
-                    disabled: bpm >= MAX_BPM,
-                    onclick: move |_| practice.set_bpm(bpm + 1),
-                    Plus { size: 20 }
-                }
+                StepButton { faster: true, disabled: bpm >= MAX_BPM }
             }
             label { class: "labelled-slider practice-bpm-slider",
                 span { class: "slider-labels",
@@ -167,14 +161,84 @@ fn Stage() -> Element {
                 div { class: "trainer-slot",
                     if options.trainer_on {
                         span { class: "trainer-pill",
+                            "Trainer"
+                            // Drawn, as the text's middle dot sits below its
+                            // middle
+                            span { class: "pill-separator", "aria-hidden": "true" }
                             if f64::from(bpm) >= options.trainer.up_to_bpm {
-                                "Trainer · at {options.trainer.up_to_bpm} BPM"
+                                "at {options.trainer.up_to_bpm} BPM"
                             } else {
-                                "Trainer · {bpm} → {options.trainer.up_to_bpm} BPM"
+                                "{bpm} → {options.trainer.up_to_bpm} BPM"
                             }
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+/// − or +: a tap moves the tempo by 1 BPM, and holding it steps by
+/// `HOLD_STEP`, landing on multiples of it, until it's let go
+#[component]
+fn StepButton(faster: bool, disabled: bool) -> Element {
+    let mut practice = use_practice();
+    // Set while the button is held, until it starts stepping
+    let mut hold = use_signal(|| None::<Task>);
+    let mut stepped = use_signal(|| false);
+
+    let mut stop = move || {
+        if let Some(task) = hold.take() {
+            task.cancel();
+        }
+    };
+    let handle_press = move |event: MouseEvent| {
+        if event.trigger_button() != Some(MouseButton::Primary) {
+            return;
+        }
+        stop();
+        stepped.set(false);
+        hold.set(Some(spawn(async move {
+            tokio::time::sleep(HOLD_DELAY).await;
+            loop {
+                stepped.set(true);
+                let bpm = practice.bpm();
+                practice.set_bpm(if faster {
+                    (bpm / HOLD_STEP + 1) * HOLD_STEP
+                } else {
+                    bpm.saturating_sub(1) / HOLD_STEP * HOLD_STEP
+                });
+                tokio::time::sleep(HOLD_REPEAT).await;
+            }
+        })));
+    };
+    // A tap, let go before the hold started stepping
+    let handle_release = move |_: MouseEvent| {
+        let was_held = hold.peek().is_some();
+        stop();
+        if was_held && !stepped() {
+            let bpm = practice.bpm();
+            practice.set_bpm(if faster {
+                bpm + 1
+            } else {
+                bpm.saturating_sub(1)
+            });
+        }
+    };
+
+    rsx! {
+        button {
+            class: "bpm-step",
+            title: if faster { "Faster. Hold to step by 5" } else { "Slower. Hold to step by 5" },
+            aria_label: if faster { "Faster" } else { "Slower" },
+            disabled,
+            onmousedown: handle_press,
+            onmouseup: handle_release,
+            onmouseleave: move |_| stop(),
+            if faster {
+                Plus { size: 20 }
+            } else {
+                Minus { size: 20 }
             }
         }
     }

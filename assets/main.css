@@ -1175,6 +1175,7 @@ button.switch:focus-visible {
 .trainer-pill {
     display: inline-flex;
     align-items: center;
+    gap: 6px;
     height: 28px;
     padding: 0 12px;
     border-radius: 999px;
@@ -1183,6 +1184,13 @@ button.switch:focus-visible {
     font-size: 12px;
     font-weight: 500;
     white-space: nowrap;
+}
+
+.pill-separator {
+    width: 3px;
+    height: 3px;
+    border-radius: 50%;
+    background: currentColor;
 }
 
 .practice-panel {
