@@ -67,7 +67,8 @@ pub fn VolumeControl() -> Element {
     let refresh_ports = midi::refresh_ports;
 
     let handle_toggle_menu = move |_: MouseEvent| {
-        if !open() {
+        // Looking for ports starts the system's MIDI, so only once it's used
+        if !open() && is_midi {
             refresh_ports();
         }
         open.toggle();
@@ -189,7 +190,13 @@ pub fn VolumeControl() -> Element {
                             .iter()
                             .map(|&(option, label)| SegmentOption::new(label, option == output))
                             .collect::<Vec<_>>(),
-                        onselect: move |i: usize| playback_manager.set_drums_output(OUTPUTS[i].0),
+                        onselect: move |i: usize| {
+                            let output = OUTPUTS[i].0;
+                            if output == DrumsOutput::Midi {
+                                refresh_ports();
+                            }
+                            playback_manager.set_drums_output(output);
+                        },
                     }
                     if is_midi {
                         div { class: "popover-field",

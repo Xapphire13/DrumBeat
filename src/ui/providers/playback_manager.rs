@@ -75,7 +75,10 @@ pub fn use_playback_manager_provider() {
             audio: {
                 let audio = settings::load().audio;
                 apply_audio(&audio);
-                connect_midi(&audio);
+                // The system's MIDI is only started for MIDI out
+                if audio.output == DrumsOutput::Midi {
+                    connect_midi(&audio);
+                }
                 audio
             },
             loop_range: None,
