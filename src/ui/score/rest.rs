@@ -110,7 +110,7 @@ pub fn Rest(
                     d: stem,
                     fill: "none",
                     stroke: "black",
-                    stroke_width: 1.5,
+                    stroke_width: 0.12 * line_height,
                 }
                 for (d, (cx, cy)) in flag_paths {
                     path {
