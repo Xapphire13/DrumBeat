@@ -298,6 +298,36 @@ body {
     background: #9a7fff;
 }
 
+.playback-settings {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 20px;
+}
+
+.volume-control {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.playback-bar .mute-button {
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+}
+
+.volume-control input {
+    width: 80px;
+}
+
+/* Short of room, volume is just the mute button */
+@container (max-width: 1019.9px) {
+    .volume-control input {
+        display: none;
+    }
+}
+
 .tempo-control {
     display: flex;
     align-items: center;
@@ -320,9 +350,13 @@ body {
 }
 
 .tempo-slider input {
+    width: 180px;
+}
+
+.tempo-slider input,
+.volume-control input {
     -webkit-appearance: none;
     appearance: none;
-    width: 180px;
     height: 6px;
     margin: 0;
     border-radius: 3px;
@@ -334,7 +368,8 @@ body {
     outline: none;
 }
 
-.tempo-slider input::-webkit-slider-thumb {
+.tempo-slider input::-webkit-slider-thumb,
+.volume-control input::-webkit-slider-thumb {
     -webkit-appearance: none;
     width: 16px;
     height: 16px;

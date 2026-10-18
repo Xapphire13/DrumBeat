@@ -20,6 +20,9 @@ pub struct PlaybackState {
     performance_timestamp: u32,
     /// Multiplies the score's tempo, e.g. 0.5 plays at half speed
     speed: f64,
+    /// From 0 to 1
+    volume: f64,
+    muted: bool,
     /// Set while the score is playing
     clock: Option<PlaybackClock>,
 }
@@ -46,6 +49,8 @@ pub fn use_playback_manager_provider() {
             playhead_timestamp: 0,
             performance_timestamp: 0,
             speed: 1.0,
+            volume: 1.0,
+            muted: false,
             clock: None,
         })
     });
@@ -120,6 +125,30 @@ impl PlaybackManager {
             audio::set_speed(speed);
         }
         state.speed = speed;
+    }
+
+    pub fn volume(&self) -> f64 {
+        (self.state)().volume
+    }
+
+    pub fn is_muted(&self) -> bool {
+        (self.state)().muted
+    }
+
+    /// Set the volume, from 0 to 1. Turning it up unmutes
+    pub fn set_volume(&mut self, volume: f64) {
+        let mut state = self.state.write();
+        state.volume = volume.clamp(0.0, 1.0);
+        if state.volume > 0.0 {
+            state.muted = false;
+        }
+        apply_volume(&state);
+    }
+
+    pub fn toggle_mute(&mut self) {
+        let mut state = self.state.write();
+        state.muted = !state.muted;
+        apply_volume(&state);
     }
 
     /// Start moving the playhead in real time, following the score's tempo
@@ -242,6 +271,11 @@ impl PlaybackManager {
             self.seek(prev_timestamp, score);
         }
     }
+}
+
+fn apply_volume(state: &PlaybackState) {
+    let volume = if state.muted { 0.0 } else { state.volume };
+    audio::set_volume(volume as f32);
 }
 
 pub fn use_playback_manager() -> PlaybackManager {

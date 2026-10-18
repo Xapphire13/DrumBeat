@@ -2,7 +2,8 @@ use std::cmp::Ordering;
 
 use dioxus::prelude::*;
 use lucide_dioxus::{
-    ChevronLeft, ChevronRight, Pause, Play, Repeat, RotateCcw, SkipBack, SkipForward,
+    ChevronLeft, ChevronRight, Pause, Play, Repeat, RotateCcw, SkipBack, SkipForward, Volume1,
+    Volume2, VolumeX,
 };
 
 use crate::{
@@ -80,14 +81,28 @@ pub fn PlaybackBar() -> Element {
 
     let handle_reset_speed = move |_: MouseEvent| playback_manager.set_speed(1.0);
 
+    let is_muted = playback_manager.is_muted();
+    // A muted slider reads as empty, and dragging it unmutes
+    let volume_percent = if is_muted {
+        0.0
+    } else {
+        (playback_manager.volume() * 100.0).round()
+    };
+    let handle_toggle_mute = move |_: MouseEvent| playback_manager.toggle_mute();
+    let handle_volume_input = move |event: FormEvent| {
+        if let Ok(percent) = event.value().parse::<f64>() {
+            playback_manager.set_volume(percent / 100.0);
+        }
+    };
+
     rsx! {
         div { class: "playback-bar",
-            div {
-                class: "measure-strip",
-                "aria-hidden": "true",
+            div { class: "measure-strip", "aria-hidden": "true",
                 for group in segments {
                     if let Some(class) = group.pass_class {
-                        span { class, style: "flex: {group.segments.len()} 1 0",
+                        span {
+                            class,
+                            style: "flex: {group.segments.len()} 1 0",
                             for &class in &group.segments {
                                 span { class }
                             }
@@ -110,7 +125,9 @@ pub fn PlaybackBar() -> Element {
                         }
                     }
                     if passes > 1 {
-                        span { class: "repeat-pass", title: "Time through the repeat",
+                        span {
+                            class: "repeat-pass",
+                            title: "Time through the repeat",
                             Repeat { size: 13 }
                             span { class: "repeat-pass-long", "Pass {pass} of {passes}" }
                             span { class: "repeat-pass-short", "{pass}/{passes}" }
@@ -155,41 +172,68 @@ pub fn PlaybackBar() -> Element {
                     }
                 }
 
-                div {
-                    class: "tempo-control",
-                    title: "Playback speed, relative to the score's tempo",
-                    label { class: "tempo-slider",
-                        span { class: "tempo-slider-labels",
-                            span { class: "control-label", "Tempo" }
-                            span { "{SLIDER_MIN_PERCENT}–{SLIDER_MAX_PERCENT}%" }
+                div { class: "playback-settings",
+                    div { class: "volume-control",
+                        button {
+                            class: "mute-button",
+                            title: if is_muted { "Unmute (M)" } else { "Mute (M)" },
+                            onclick: handle_toggle_mute,
+                            if volume_percent == 0.0 {
+                                VolumeX { size: 18 }
+                            } else if volume_percent < 50.0 {
+                                Volume1 { size: 18 }
+                            } else {
+                                Volume2 { size: 18 }
+                            }
                         }
                         input {
                             r#type: "range",
-                            style: "--fill: {slider_fill}%",
-                            min: SLIDER_MIN_PERCENT,
-                            max: SLIDER_MAX_PERCENT,
-                            step: 5,
-                            value: speed_percent,
-                            oninput: handle_speed_input,
+                            title: "Volume",
+                            style: "--fill: {volume_percent}%",
+                            min: 0,
+                            max: 100,
+                            step: 1,
+                            value: volume_percent,
+                            oninput: handle_volume_input,
                         }
                     }
-                    button {
-                        class: "tempo-reset",
-                        title: "Reset to the score's tempo",
-                        disabled: speed_percent == 100.0,
-                        onclick: handle_reset_speed,
-                        "{speed_percent}%"
-                        RotateCcw { size: 13 }
-                    }
-                    label { class: "bpm-field",
-                        input {
-                            r#type: "number",
-                            title: "Play at an exact tempo",
-                            min: 1,
-                            value: bpm,
-                            onchange: handle_bpm_change,
+
+                    div {
+                        class: "tempo-control",
+                        title: "Playback speed, relative to the score's tempo",
+                        label { class: "tempo-slider",
+                            span { class: "tempo-slider-labels",
+                                span { class: "control-label", "Tempo" }
+                                span { "{SLIDER_MIN_PERCENT}–{SLIDER_MAX_PERCENT}%" }
+                            }
+                            input {
+                                r#type: "range",
+                                style: "--fill: {slider_fill}%",
+                                min: SLIDER_MIN_PERCENT,
+                                max: SLIDER_MAX_PERCENT,
+                                step: 5,
+                                value: speed_percent,
+                                oninput: handle_speed_input,
+                            }
                         }
-                        "BPM"
+                        button {
+                            class: "tempo-reset",
+                            title: "Reset to the score's tempo",
+                            disabled: speed_percent == 100.0,
+                            onclick: handle_reset_speed,
+                            "{speed_percent}%"
+                            RotateCcw { size: 13 }
+                        }
+                        label { class: "bpm-field",
+                            input {
+                                r#type: "number",
+                                title: "Play at an exact tempo",
+                                min: 1,
+                                value: bpm,
+                                onchange: handle_bpm_change,
+                            }
+                            "BPM"
+                        }
                     }
                 }
             }

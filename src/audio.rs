@@ -4,6 +4,7 @@
 
 use std::sync::{
     OnceLock,
+    atomic::{AtomicU32, Ordering},
     mpsc::{self, Receiver, Sender},
 };
 
@@ -23,6 +24,14 @@ const MAX_VOICES: usize = 64;
 
 /// Scales the mix down so several hits at once don't clip
 const MASTER_GAIN: f32 = 0.5;
+
+/// The output volume as `f32` bits, from 0 to 1. Kept outside the command
+/// channel so setting it doesn't open the output device
+static VOLUME: AtomicU32 = AtomicU32::new(0x3f80_0000); // 1.0
+
+/// How far the volume moves towards a new setting each sample, so changing it
+/// doesn't click
+const VOLUME_SMOOTHING: f32 = 0.002;
 
 enum Command {
     /// Start playing `hits` from `from_seconds` into the performance
@@ -55,7 +64,12 @@ pub fn set_speed(speed: f64) {
     send(Command::SetSpeed(speed));
 }
 
-/// Stop scheduling hits. Ones already sounding ring out
+/// Set the output volume, from 0 (silent) to 1
+pub fn set_volume(volume: f32) {
+    VOLUME.store(volume.clamp(0.0, 1.0).to_bits(), Ordering::Relaxed);
+}
+
+/// Stop playing, cutting off any hits that are still sounding
 pub fn stop() {
     send(Command::Stop);
 }
@@ -147,6 +161,7 @@ where
                 while let Ok(command) = commands.try_recv() {
                     mixer.handle(command);
                 }
+                mixer.target_volume = f32::from_bits(VOLUME.load(Ordering::Relaxed));
                 for frame in data.chunks_mut(channels) {
                     let sample = T::from_sample(mixer.next_sample());
                     frame.fill(sample);
@@ -175,6 +190,9 @@ struct Mixer {
     voices: Vec<Voice>,
     /// Changes for every voice, so overlapping hits don't share their noise
     seed: u32,
+    /// The gain applied to the mix, easing towards `target_volume`
+    volume: f32,
+    target_volume: f32,
 }
 
 impl Mixer {
@@ -188,6 +206,8 @@ impl Mixer {
             playing: false,
             voices: Vec::with_capacity(MAX_VOICES),
             seed: 1,
+            volume: 1.0,
+            target_volume: 1.0,
         }
     }
 
@@ -205,7 +225,13 @@ impl Mixer {
             }
             Command::Seek(seconds) => self.seek(seconds),
             Command::SetSpeed(speed) => self.speed = speed,
-            Command::Stop => self.playing = false,
+            Command::Stop => {
+                self.playing = false;
+                // A quick fade rather than silence, which would click
+                for voice in &mut self.voices {
+                    voice.choke();
+                }
+            }
         }
     }
 
@@ -227,7 +253,9 @@ impl Mixer {
         }
 
         let mix: f32 = self.voices.iter_mut().map(Voice::next_sample).sum();
-        (mix * MASTER_GAIN).tanh()
+        self.volume += (self.target_volume - self.volume) * VOLUME_SMOOTHING;
+        // Squared, since loudness is heard on a roughly logarithmic scale
+        (mix * MASTER_GAIN).tanh() * self.volume * self.volume
     }
 
     fn trigger(&mut self, hit: Hit) {

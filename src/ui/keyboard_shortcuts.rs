@@ -20,7 +20,7 @@ enum Modifier {
 /// keys' default actions, like scrolling the score or nudging the tempo
 /// slider, are suppressed
 const LISTENER: &str = r#"
-const keys = new Set([" ", "ArrowLeft", "ArrowRight", "Home", "End"]);
+const keys = new Set([" ", "ArrowLeft", "ArrowRight", "Home", "End", "m"]);
 document.addEventListener("keydown", (event) => {
     if (!keys.has(event.key)) return;
     const target = event.target;
@@ -65,7 +65,7 @@ impl KeyPress {
 
 /// Space plays and pauses, Left/Right step between notes, the measure
 /// modifier with Left/Right steps between measures, and Home/End jump to the
-/// start and end of the score
+/// start and end of the score, and M mutes
 pub fn use_keyboard_shortcuts() {
     let mut playback_manager = use_playback_manager();
     let score = use_score_manager();
@@ -95,6 +95,7 @@ pub fn use_keyboard_shortcuts() {
                 "ArrowRight" if press.no_modifiers() => playback_manager.skip_to_next_note(&score),
                 "Home" if press.no_modifiers() => playback_manager.skip_to_start(&score),
                 "End" if press.no_modifiers() => playback_manager.skip_to_end(&score),
+                "m" if press.no_modifiers() && !press.repeat => playback_manager.toggle_mute(),
                 _ => {}
             }
         }
