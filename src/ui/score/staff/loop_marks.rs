@@ -66,16 +66,22 @@ pub struct StaffPoint {
 }
 
 impl StaffPoint {
-    /// Where the point is played, on the pass through a repeat nearest
-    /// `near`. `first_measure` is the index in the score of the staff's
-    /// first measure
+    /// Where the point is played, as the other end of a loop from `anchor`,
+    /// which is written at `anchor_written` (see `Performance::locate`).
+    /// `first_measure` is the index in the score of the staff's first measure
     pub fn locate(
         self,
         first_measure: usize,
         performance: &Performance,
-        near: u32,
+        anchor: u32,
+        anchor_written: u32,
     ) -> Option<LoopPoint> {
-        let timestamp = performance.locate(first_measure + self.measure, self.offset, near)?;
+        let timestamp = performance.locate(
+            first_measure + self.measure,
+            self.offset,
+            anchor,
+            anchor_written,
+        )?;
         Some(if self.note {
             LoopPoint::Note(timestamp)
         } else {

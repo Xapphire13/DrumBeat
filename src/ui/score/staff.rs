@@ -102,25 +102,27 @@ pub fn Staff(dimensions: StaffDimensions, layout: StaffLayout) -> Element {
     let mut loop_editor = use_loop_editor();
 
     // The note under the pointer, where the playhead snaps, on the pass
-    // through a repeat nearest `near`
+    // through a repeat nearest `near`, and where it's written
     let note_at = {
         let measures = measures.clone();
         move |event: &MouseEvent, near: u32| {
             let x = event.coordinates().element().x as f32 / zoom;
             let written = closest_snap(x, &scales.peek(), &measures)?.closest_timestamp;
-            score.peek().performance.to_performance(written, near)
+            let timestamp = score.peek().performance.to_performance(written, near)?;
+            Some((timestamp, written))
         }
     };
 
     // Where the dragged end of the loop goes with the pointer here
     let loop_point_at = {
         let measures = measures.clone();
-        move |event: &MouseEvent, by_tab: bool, near: u32| {
+        move |event: &MouseEvent, by_tab: bool, anchor: u32, anchor_written: u32| {
             let x = event.coordinates().element().x as f32 / zoom;
             closest_loop_point(x, &scales.peek(), &measures, by_tab)?.locate(
                 first_measure_number - 1,
                 &score.peek().performance,
-                near,
+                anchor,
+                anchor_written,
             )
         }
     };
@@ -134,9 +136,10 @@ pub fn Staff(dimensions: StaffDimensions, layout: StaffLayout) -> Element {
                 return;
             }
             let playhead = playback_manager.performance_timestamp();
-            if let Some(anchor) = note_at(&event, playhead) {
+            if let Some((anchor, anchor_written)) = note_at(&event, playhead) {
                 loop_editor.start_drag(LoopDrag::Score {
                     anchor: LoopPoint::Note(anchor),
+                    anchor_written,
                     current: LoopPoint::Note(anchor),
                     moved: false,
                     by_tab: false,
@@ -147,13 +150,21 @@ pub fn Staff(dimensions: StaffDimensions, layout: StaffLayout) -> Element {
 
     let handle_on_mouse_move = move |event: MouseEvent| {
         handle_on_mouse_move.call(event.clone());
-        let Some(LoopDrag::Score { anchor, by_tab, .. }) = loop_editor.drag() else {
+        let Some(LoopDrag::Score {
+            anchor,
+            anchor_written,
+            by_tab,
+            ..
+        }) = loop_editor.drag()
+        else {
             return;
         };
         // Released outside the window
         if event.held_buttons().is_empty() {
             loop_editor.finish(&mut playback_manager, &score.peek());
-        } else if let Some(point) = loop_point_at(&event, by_tab, anchor.timestamp()) {
+        } else if let Some(point) =
+            loop_point_at(&event, by_tab, anchor.timestamp(), anchor_written)
+        {
             loop_editor.drag_to(point);
         }
     };
@@ -169,24 +180,35 @@ pub fn Staff(dimensions: StaffDimensions, layout: StaffLayout) -> Element {
         .filter(|_| show_tabs)
         .map(|(range, geometry)| {
             let score = score.read();
-            let label = |timestamp| count_label(timestamp, &score.performance, &score.measures);
+            let performance = &score.performance;
+            let label = |timestamp| count_label(timestamp, performance, &score.measures);
             // Each tab names the count at the edge it sits on. The loop goes
-            // up to the end tab's count without playing it
-            (
-                geometry
-                    .start_x
-                    .map(|x| (x * zoom, label(range.start), range.end, range.start)),
-                geometry
-                    .end_x
-                    .map(|x| (x * zoom, label(range.end), range.start, range.end)),
-            )
+            // up to the end tab's count without playing it. Dragging one
+            // keeps the other end where it is
+            let start_tab = geometry.start_x.map(|x| TabData {
+                x: x * zoom,
+                label: label(range.start),
+                anchor: range.end,
+                anchor_written: performance.to_written_end(range.end),
+                current: range.start,
+            });
+            let end_tab = geometry.end_x.map(|x| TabData {
+                x: x * zoom,
+                label: label(range.end),
+                anchor: range.start,
+                anchor_written: performance.to_written(range.start),
+                current: range.end,
+            });
+            (start_tab, end_tab)
         });
     // Grabbing a tab drags that end of the loop, keeping the other in place
-    let grab_tab = move |anchor: u32, current: u32| {
+    let grab_tab = move |tab: &TabData| {
+        let (anchor, anchor_written, current) = (tab.anchor, tab.anchor_written, tab.current);
         move |event: MouseEvent| {
             event.stop_propagation();
             loop_editor.start_drag(LoopDrag::Score {
                 anchor: LoopPoint::Edge(anchor),
+                anchor_written,
                 current: LoopPoint::Edge(current),
                 moved: true,
                 by_tab: true,
@@ -313,28 +335,28 @@ pub fn Staff(dimensions: StaffDimensions, layout: StaffLayout) -> Element {
             }
 
             if let Some((start_tab, end_tab)) = loop_tabs {
-                if let Some((x, label, anchor, current)) = start_tab {
+                if let Some(tab) = start_tab {
                     button {
                         class: "loop-tab loop-tab-start",
-                        style: "left: {x - 1.0}px",
+                        style: "left: {tab.x - 1.0}px",
                         title: "Drag to move the start of the loop",
-                        aria_label: "Loop start, {label}. Drag to move",
-                        onmousedown: grab_tab(anchor, current),
+                        aria_label: "Loop start, {tab.label}. Drag to move",
+                        onmousedown: grab_tab(&tab),
                         // Its own coordinates would throw off the playhead's
                         onmousemove: |event: MouseEvent| event.stop_propagation(),
-                        "{label}"
+                        "{tab.label}"
                     }
                 }
-                if let Some((x, label, anchor, current)) = end_tab {
+                if let Some(tab) = end_tab {
                     button {
                         class: "loop-tab loop-tab-end",
-                        style: "left: {x + 1.0}px",
+                        style: "left: {tab.x + 1.0}px",
                         title: "Drag to move the end of the loop",
-                        aria_label: "Loop end, {label}. Drag to move",
-                        onmousedown: grab_tab(anchor, current),
+                        aria_label: "Loop end, {tab.label}. Drag to move",
+                        onmousedown: grab_tab(&tab),
                         // Its own coordinates would throw off the playhead's
                         onmousemove: |event: MouseEvent| event.stop_propagation(),
-                        "{label}"
+                        "{tab.label}"
                     }
                 }
             }
@@ -342,29 +364,58 @@ pub fn Staff(dimensions: StaffDimensions, layout: StaffLayout) -> Element {
     }
 }
 
-/// Scroll the staff into view when the playhead moves onto it. While
-/// playing it's brought to the top, so the staves after it can be read
-/// ahead; otherwise, e.g. when stepping through notes, it's only scrolled
-/// far enough to be seen. Playing from a staff that's out of view brings it
-/// back too
+/// One of the tabs for dragging the loop's ends
+struct TabData {
+    /// Where its edge is, in window pixels
+    x: f32,
+    label: String,
+    /// The loop's other end, which stays put, and where that's written
+    anchor: u32,
+    anchor_written: u32,
+    /// This end
+    current: u32,
+}
+
+/// Follow the playhead while the score plays. When it plays on to this
+/// staff, the staff is brought to the top so the staves after it can be read
+/// ahead, or, while looping, just far enough to be seen, so going round a
+/// loop over two staves doesn't jump back and forth. Starting to play, or
+/// jumping the playhead while playing, brings the staff into view if it's
+/// out of it. Nothing scrolls while paused, nor for a click on the score,
+/// where the playhead is already in view
 fn use_follow_playhead(container: Signal<Option<Rc<MountedData>>>, span: Option<(u32, u32)>) {
     let playback_manager = use_playback_manager();
-    // Only changes when the playhead enters or leaves the staff, or playback
-    // starts or stops, not on every frame
+    // Only changes when the playhead enters or leaves the staff, playback
+    // starts or stops, or the playhead is moved by hand, not on every frame
     let state = use_memo(use_reactive!(|span| {
         let timestamp = playback_manager.playhead_timestamp();
         let here = span.is_some_and(|(start, end)| (start..end).contains(&timestamp));
-        (here, playback_manager.is_playing())
+        let looping = playback_manager.loop_range().is_some();
+        (
+            here,
+            playback_manager.is_playing(),
+            looping,
+            playback_manager.seeks(),
+        )
     }));
-    let previous = use_hook(|| Rc::new(Cell::new((false, false))));
+    let previous = use_hook(|| Rc::new(Cell::new((false, false, false, (0, false)))));
 
     use_effect(move || {
-        let (here, playing) = state();
-        let (was_here, was_playing) = previous.replace((here, playing));
-        let vertical = match (here, playing) {
-            (true, true) if !was_here => ScrollLogicalPosition::Start,
-            (true, _) if !was_here || !was_playing => ScrollLogicalPosition::Nearest,
-            _ => return,
+        let current = state();
+        let (here, playing, looping, (seeks, on_score)) = current;
+        let (was_here, was_playing, _, (previous_seeks, _)) = previous.replace(current);
+        if !here || !playing {
+            return;
+        }
+        let jumped = seeks != previous_seeks;
+        let vertical = if !was_playing || (jumped && !on_score) {
+            ScrollLogicalPosition::Nearest
+        } else if was_here || jumped {
+            return;
+        } else if looping {
+            ScrollLogicalPosition::Nearest
+        } else {
+            ScrollLogicalPosition::Start
         };
         let Some(container) = container.peek().clone() else {
             return;

@@ -12,9 +12,11 @@ use crate::{
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum LoopDrag {
     /// Across the score, or by one of the loop's tabs (`by_tab`). `anchor`
-    /// is the end that stays put and `current` the one under the pointer
+    /// is the end that stays put, written at `anchor_written`, and `current`
+    /// the one under the pointer
     Score {
         anchor: LoopPoint,
+        anchor_written: u32,
         current: LoopPoint,
         moved: bool,
         by_tab: bool,
@@ -78,6 +80,7 @@ impl LoopEditor {
     pub fn drag_to(&mut self, point: LoopPoint) {
         if let Some(LoopDrag::Score {
             anchor,
+            anchor_written,
             current,
             by_tab,
             ..
@@ -86,6 +89,7 @@ impl LoopEditor {
         {
             self.drag.set(Some(LoopDrag::Score {
                 anchor,
+                anchor_written,
                 current: point,
                 moved: true,
                 by_tab,
@@ -126,10 +130,13 @@ impl LoopEditor {
             return;
         };
         match (drag, drag.preview(score)) {
-            (_, Some(range)) => playback_manager.set_loop(range, score),
+            (LoopDrag::Score { .. }, Some(range)) => playback_manager.set_loop(range, score, true),
+            (LoopDrag::Measures { .. }, Some(range)) => {
+                playback_manager.set_loop(range, score, false);
+            }
             (LoopDrag::Score { anchor, .. }, None) => {
                 if anchor.timestamp() < score.performance.end_timestamp() {
-                    playback_manager.seek(anchor.timestamp(), score);
+                    playback_manager.seek_on_score(anchor.timestamp(), score);
                 }
             }
             (LoopDrag::Measures { anchor, .. }, None) => {

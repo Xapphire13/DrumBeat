@@ -29,6 +29,12 @@ pub struct PlaybackState {
     /// The section being practised, which plays over and over. The playhead
     /// is kept inside it
     loop_range: Option<LoopRange>,
+    /// Counts every time the playhead is moved by hand, so the score can tell
+    /// a jump from the playhead playing on to the next staff
+    seeks: u32,
+    /// Whether the last move by hand was made on the score itself, where the
+    /// playhead is already in view
+    last_seek_on_score: bool,
     /// Set while the score is playing
     clock: Option<PlaybackClock>,
 }
@@ -58,6 +64,8 @@ pub fn use_playback_manager_provider() {
             volume: 1.0,
             muted: false,
             loop_range: None,
+            seeks: 0,
+            last_seek_on_score: false,
             clock: None,
         })
     });
@@ -76,7 +84,18 @@ impl PlaybackManager {
     /// Move the playhead to a performance timestamp. Moving it out of the
     /// loop stops looping
     pub fn seek(&mut self, timestamp: u32, score: &Score) {
+        self.seek_from(timestamp, score, false);
+    }
+
+    /// Move the playhead to where it was clicked on the score
+    pub fn seek_on_score(&mut self, timestamp: u32, score: &Score) {
+        self.seek_from(timestamp, score, true);
+    }
+
+    fn seek_from(&mut self, timestamp: u32, score: &Score, on_score: bool) {
         let mut state = self.state.write();
+        state.seeks = state.seeks.wrapping_add(1);
+        state.last_seek_on_score = on_score;
         if state
             .loop_range
             .is_some_and(|range| !range.contains(timestamp))
@@ -99,8 +118,8 @@ impl PlaybackManager {
     }
 
     /// Start looping `range`, moving the playhead to its start if it's
-    /// outside it
-    pub fn set_loop(&mut self, range: LoopRange, score: &Score) {
+    /// outside it. `on_score` is whether the loop was picked out on the score
+    pub fn set_loop(&mut self, range: LoopRange, score: &Score, on_score: bool) {
         let playhead = {
             let mut state = self.state.write();
             state.loop_range = Some(range);
@@ -110,7 +129,7 @@ impl PlaybackManager {
             state.performance_timestamp
         };
         if !range.contains(playhead) {
-            self.seek(range.start, score);
+            self.seek_from(range.start, score, on_score);
         }
     }
 
@@ -120,6 +139,13 @@ impl PlaybackManager {
         }
         self.state.write().loop_range = None;
         audio::set_loop(None);
+    }
+
+    /// How many times the playhead has been moved by hand, and whether the
+    /// last time was on the score
+    pub fn seeks(&self) -> (u32, bool) {
+        let state = (self.state)();
+        (state.seeks, state.last_seek_on_score)
     }
 
     pub fn playhead_timestamp(&self) -> u32 {

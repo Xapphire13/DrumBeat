@@ -119,15 +119,42 @@ impl Performance {
             .min_by_key(|&timestamp| timestamp.abs_diff(near))
     }
 
-    /// Where a place `offset` ticks into a written measure is played, on the
-    /// pass nearest `near`. The offset can be the measure's length, for its
-    /// closing bar line
-    pub fn locate(&self, measure_index: usize, offset: u32, near: u32) -> Option<u32> {
+    /// Where a place `offset` ticks into a written measure is played, as one
+    /// end of a stretch whose other end, `anchor`, is written at
+    /// `anchor_written`. The offset can be the measure's length, for its
+    /// closing bar line.
+    ///
+    /// A repeated measure is played more than once, so this picks the pass
+    /// that keeps the two ends in the order they're written, nearest the
+    /// anchor: within a repeat that's the anchor's own pass, so the stretch
+    /// doesn't run from late in one pass to early in the next
+    pub fn locate(
+        &self,
+        measure_index: usize,
+        offset: u32,
+        anchor: u32,
+        anchor_written: u32,
+    ) -> Option<u32> {
         self.measures
             .iter()
             .filter(|played| played.measure_index == measure_index && offset <= played.length)
-            .map(|played| played.timestamp + offset)
-            .min_by_key(|&timestamp| timestamp.abs_diff(near))
+            .map(|played| (played.timestamp + offset, played.written_timestamp + offset))
+            .min_by_key(|&(timestamp, written)| {
+                let out_of_order = written.cmp(&anchor_written) != timestamp.cmp(&anchor);
+                (out_of_order, timestamp.abs_diff(anchor))
+            })
+            .map(|(timestamp, _)| timestamp)
+    }
+
+    /// Where the end of a stretch finishing at `timestamp` is written. Unlike
+    /// `to_written`, an end on a bar line stays with the measure it closes,
+    /// even where playback then jumps back for a repeat
+    pub fn to_written_end(&self, timestamp: u32) -> u32 {
+        if timestamp == 0 {
+            0
+        } else {
+            self.to_written(timestamp - 1) + 1
+        }
     }
 
     /// Sorted, unique performance timestamps of every note that is played
@@ -316,5 +343,47 @@ mod tests {
         assert!((tempo.bpm_at(3840 + 1920) - 60.0).abs() < 1e-9);
         assert!((tempo.bpm_at(2 * 3840) - 120.0).abs() < 1e-9);
         assert!((tempo.bpm_at(2 * 3840 + 1920) - 60.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn locates_loop_ends_on_the_pass_that_keeps_them_in_order() {
+        // Measure 0, then 1 played three times, then 2
+        let measures = measures(&[(false, None), (true, Some(3)), (false, None)]);
+        let performance = Performance::new(&measures, &TempoMap::new(120.0));
+        let pass = |n: u32| n * 3840;
+
+        // Inside the repeat: an end dragged to before the anchor stays in
+        // the anchor's pass, though the next pass is nearer in time
+        let anchor = pass(2) + 2400;
+        assert_eq!(
+            performance.locate(1, 240, anchor, 3840 + 2400),
+            Some(pass(2) + 240)
+        );
+        // Its closing bar line ends that same pass
+        assert_eq!(
+            performance.locate(1, 3840, pass(2) + 480, 3840 + 480),
+            Some(pass(3))
+        );
+        // Into the repeat from before it: the first pass
+        assert_eq!(performance.locate(1, 3000, 960, 960), Some(pass(1) + 3000));
+        // Out of the repeat, forwards and backwards
+        assert_eq!(
+            performance.locate(2, 500, pass(3) + 1000, 3840 + 1000),
+            Some(pass(4) + 500)
+        );
+        assert_eq!(
+            performance.locate(0, 3000, pass(1) + 500, 3840 + 500),
+            Some(3000)
+        );
+    }
+
+    #[test]
+    fn an_end_on_a_repeat_bar_line_is_written_with_its_measure() {
+        let measures = measures(&[(false, None), (true, Some(3)), (false, None)]);
+        let performance = Performance::new(&measures, &TempoMap::new(120.0));
+        // The end of the second pass, where playback jumps back
+        assert_eq!(performance.to_written(3 * 3840), 3840);
+        assert_eq!(performance.to_written_end(3 * 3840), 2 * 3840);
+        assert_eq!(performance.to_written_end(2 * 3840 + 480), 3840 + 480);
     }
 }

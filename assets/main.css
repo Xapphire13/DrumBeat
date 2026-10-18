@@ -400,61 +400,10 @@ body {
     display: none;
 }
 
-/* The pass and loop chips sit side by side, or stacked when short of room */
-.position-chips {
-    display: flex;
-    flex-direction: row;
-    align-items: flex-start;
-    gap: 8px;
-}
 
-.position-chips:empty {
-    display: none;
-}
-
-.loop-chip {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    height: 28px;
-    padding: 0 3px 0 9px;
-    border-radius: 999px;
-    background: var(--accent);
-    color: #ffffff;
-    font-size: 12px;
-    font-weight: 600;
-    white-space: nowrap;
-}
-
-.loop-chip-range {
-    font-family: var(--mono);
-}
-
-.playback-bar .loop-clear {
-    width: 22px;
-    height: 22px;
-    padding: 0;
-    border-radius: 50%;
-    background: rgba(15, 17, 22, 0.22);
-    color: #ffffff;
-}
-
-.playback-bar .loop-clear:hover:not(:disabled) {
-    background: rgba(15, 17, 22, 0.4);
-}
-
-@container (max-width: 1059.9px) {
-    .position-chips {
-        flex-direction: column;
-        gap: 4px;
-    }
-}
-
-/* Short of room, the pass chip drops its words and the loop chip its range,
-   which stays in its tooltip */
+/* Short of room, the pass chip drops its words */
 @container (max-width: 903.9px) {
-    .repeat-pass-long,
-    .loop-chip-range {
+    .repeat-pass-long {
         display: none;
     }
 

@@ -81,23 +81,6 @@ impl LoopRange {
         self.start <= timestamp && timestamp < self.end
     }
 
-    /// How long the loop is, in beats of each measure's time signature
-    pub fn beats(&self, performance: &Performance, measures: &[Measure]) -> f64 {
-        performance
-            .measures()
-            .iter()
-            .map(|played| {
-                let from = self.start.max(played.timestamp);
-                let to = self.end.min(played.timestamp + played.length);
-                let beat = measures[played.measure_index]
-                    .time_signature
-                    .note_value
-                    .get_ticks();
-                f64::from(to.saturating_sub(from)) / f64::from(beat)
-            })
-            .sum()
-    }
-
     /// The part of the played measure at `index` that the loop covers, as
     /// fractions of the measure from its start, if it covers any of it
     pub fn measure_coverage(&self, performance: &Performance, index: usize) -> Option<(f64, f64)> {
@@ -256,7 +239,6 @@ mod tests {
         assert!(!range.contains(range.end));
         assert_eq!(count_label(range.start, &performance, &measures), "1:2");
         assert_eq!(count_label(range.end, &performance, &measures), "4:1");
-        assert!((range.beats(&performance, &measures) - 11.0).abs() < 1e-9);
     }
 
     #[test]
@@ -298,7 +280,6 @@ mod tests {
         let range = LoopRange::between(N(last), N(last), &performance, &measures);
         assert_eq!(range.end, 2 * MEASURE);
         assert_eq!(count_label(range.end, &performance, &measures), "End");
-        assert!((range.beats(&performance, &measures) - 0.5).abs() < 1e-9);
     }
 
     #[test]

@@ -2,15 +2,12 @@ use std::cmp::Ordering;
 
 use dioxus::{html::input_data::MouseButton, prelude::*};
 use lucide_dioxus::{
-    ChevronLeft, ChevronRight, ChevronUp, Gauge, Infinity, Pause, Play, Repeat, RotateCcw,
-    SkipBack, SkipForward, Volume1, Volume2, VolumeX, X,
+    ChevronLeft, ChevronRight, ChevronUp, Gauge, Pause, Play, Repeat, RotateCcw, SkipBack,
+    SkipForward, Volume1, Volume2, VolumeX,
 };
 
 use crate::{
-    data::{
-        loop_range::{LoopRange, count_label},
-        performance::PlayedMeasure,
-    },
+    data::{loop_range::LoopRange, performance::PlayedMeasure},
     ui::providers::{
         loop_editor::{LoopDrag, use_loop_editor},
         playback_manager::use_playback_manager,
@@ -36,16 +33,6 @@ pub fn PlaybackBar() -> Element {
             .map(|index| shown_loop.and_then(|range| LoopBand::new(range, performance, index)))
             .collect()
     };
-    let loop_chip = shown_loop.map(|range| {
-        let score = score.read();
-        let label = |timestamp| count_label(timestamp, &score.performance, &score.measures);
-        let (start, end) = (label(range.start), label(range.end));
-        let length = format_beats(range.beats(&score.performance, &score.measures));
-        (
-            format!("{start}–{end}"),
-            format!("Looping {start} up to {end}, {length}"),
-        )
-    });
     // Measures are counted as they're played, with repeats expanded
     let (played_index, number_of_measures, (pass, passes), segments) = {
         let performance = &score.read().performance;
@@ -202,31 +189,13 @@ pub fn PlaybackBar() -> Element {
                             span { class: "measure-total", "/ {number_of_measures}" }
                         }
                     }
-                    div { class: "position-chips",
-                        if passes > 1 {
-                            span {
-                                class: "repeat-pass",
-                                title: "Time through the repeat",
-                                Repeat { size: 13 }
-                                span { class: "repeat-pass-long", "Pass {pass} of {passes}" }
-                                span { class: "repeat-pass-short", "{pass}/{passes}" }
-                            }
-                        }
-                        if let Some((range, description)) = loop_chip {
-                            span {
-                                class: "loop-chip",
-                                title: "{description}",
-                                aria_label: "{description}",
-                                Infinity { size: 15 }
-                                span { class: "loop-chip-range", "{range}" }
-                                button {
-                                    class: "loop-clear",
-                                    title: "Stop looping (Esc)",
-                                    aria_label: "Stop looping",
-                                    onclick: move |_| playback_manager.clear_loop(),
-                                    X { size: 12 }
-                                }
-                            }
+                    if passes > 1 {
+                        span {
+                            class: "repeat-pass",
+                            title: "Time through the repeat",
+                            Repeat { size: 13 }
+                            span { class: "repeat-pass-long", "Pass {pass} of {passes}" }
+                            span { class: "repeat-pass-short", "{pass}/{passes}" }
                         }
                     }
                 }
@@ -452,28 +421,6 @@ impl LoopBand {
     }
 }
 
-/// A loop's length, e.g. "15 beats", "½ beat" or "3¼ beats"
-fn format_beats(beats: f64) -> String {
-    let whole = beats.floor();
-    let fraction = match ((beats - whole) * 12.0).round() as u32 {
-        0 => "",
-        3 => "¼",
-        4 => "⅓",
-        6 => "½",
-        8 => "⅔",
-        9 => "¾",
-        12 => return format_beats(whole + 1.0),
-        _ => return format!("{beats:.1} beats"),
-    };
-    let number = if whole == 0.0 && !fraction.is_empty() {
-        fraction.to_string()
-    } else {
-        format!("{whole}{fraction}")
-    };
-    let unit = if beats <= 1.0 { "beat" } else { "beats" };
-    format!("{number} {unit}")
-}
-
 /// A run of segments in the measure strip. Each pass through a repeat is
 /// its own group, drawn with a bracket above it
 #[derive(Debug, PartialEq)]
@@ -573,17 +520,6 @@ mod tests {
         assert_eq!(format_time(127.4), "2:07");
         assert_eq!(format_time(3725.0), "1:02:05");
         assert_eq!(format_time(-1.0), "0:00");
-    }
-
-    #[test]
-    fn formats_loop_lengths() {
-        assert_eq!(format_beats(15.0), "15 beats");
-        assert_eq!(format_beats(1.0), "1 beat");
-        assert_eq!(format_beats(0.5), "½ beat");
-        assert_eq!(format_beats(14.5), "14½ beats");
-        assert_eq!(format_beats(3.25), "3¼ beats");
-        assert_eq!(format_beats(2.0 / 3.0), "⅔ beat");
-        assert_eq!(format_beats(1.2), "1.2 beats");
     }
 
     #[test]
