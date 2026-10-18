@@ -34,7 +34,7 @@ const HOLD_STEP: u32 = 5;
 /// How long − or + is held before it starts stepping, and how often it steps
 /// after that
 const HOLD_DELAY: Duration = Duration::from_millis(400);
-const HOLD_REPEAT: Duration = Duration::from_millis(200);
+const HOLD_REPEAT: Duration = Duration::from_millis(350);
 
 /// The standalone metronome: the beat and tempo on a stage, with its
 /// settings in a panel beside it
