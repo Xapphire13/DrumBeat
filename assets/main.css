@@ -1,4 +1,14 @@
 /* App-wide styling */
+:root {
+    --accent: #8b6cff;
+    --accent-soft: rgba(139, 108, 255, 0.16);
+    --accent-text: #b9a8ff;
+    --surface: #161922;
+    --border: #262a35;
+    --muted: #8a8f9c;
+    --mono: ui-monospace, "SF Mono", Menlo, monospace;
+}
+
 body {
     background-color: #0f1116;
     color: #ffffff;
@@ -23,8 +33,7 @@ body {
 .staves {
     flex-grow: 1;
     overflow-y: auto;
-    /* Keep the last staff clear of the playback bar */
-    padding-bottom: 96px;
+    padding-bottom: 24px;
 }
 
 .empty-score {
@@ -36,12 +45,20 @@ body {
 .toolbar {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 8px;
+    gap: 10px;
+    padding: 6px 16px;
+    border-bottom: 1px solid #1d2029;
+}
+
+.open-button {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
 }
 
 .score-title {
     font-weight: 600;
+    font-size: 14px;
 }
 
 .error {
@@ -61,47 +78,6 @@ body {
     left: 0;
     top: 0;
     stroke: black;
-}
-
-.playback-bar-container {
-    position: absolute;
-    bottom: 32px;
-    left: 0;
-    right: 0;
-    display: flex;
-    justify-content: center;
-}
-
-.playback-bar {
-    background: gray;
-    display: flex;
-    align-items: center;
-}
-
-.measure-number {
-    width: 25px;
-}
-
-.repeat-pass {
-    margin-left: 6px;
-    font-variant-numeric: tabular-nums;
-}
-
-.tempo-control {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin-left: 12px;
-}
-
-.tempo-reset {
-    min-width: 52px;
-    font-variant-numeric: tabular-nums;
-}
-
-.tempo-bpm {
-    min-width: 56px;
-    font-variant-numeric: tabular-nums;
 }
 
 .staff text {
@@ -132,8 +108,292 @@ body {
     font-weight: 600;
 }
 
-.bpm-input {
-    width: 52px;
-    margin-left: 4px;
+/* Playback bar, docked along the bottom of the window */
+.toolbar svg,
+.playback-bar svg {
+    display: block;
+    flex-shrink: 0;
+}
+
+.toolbar button,
+.playback-bar button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    background: transparent;
+    color: #c9ccd6;
+    font: inherit;
+    cursor: pointer;
+}
+
+.toolbar button:hover,
+.playback-bar button:hover:not(:disabled) {
+    background: #232733;
+}
+
+.playback-bar {
+    container-type: inline-size;
+    flex-shrink: 0;
+    background: var(--surface);
+    border-top: 1px solid var(--border);
     font-variant-numeric: tabular-nums;
+    user-select: none;
+}
+
+.measure-strip {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    height: 14px;
+    margin: 8px 16px 0;
+}
+
+.measure-segment {
+    flex: 1 1 0;
+    min-width: 1px;
+    height: 6px;
+    border-radius: 1px;
+    background: #2e323d;
+}
+
+.measure-segment.played {
+    background: rgba(139, 108, 255, 0.5);
+}
+
+.measure-segment.current {
+    background: var(--accent);
+}
+
+/* Each pass through a repeat, bracketed */
+.repeat-pass-group {
+    position: relative;
+    display: flex;
+    gap: 2px;
+}
+
+/* Inset a little so the brackets of neighbouring passes stay apart */
+.repeat-pass-group::before {
+    content: "";
+    position: absolute;
+    left: 1px;
+    right: 1px;
+    top: -7px;
+    height: 4px;
+    border: 1.5px solid #4a4f5e;
+    border-bottom: none;
+    border-radius: 2px 2px 0 0;
+}
+
+.repeat-pass-group.done::before {
+    border-color: rgba(139, 108, 255, 0.45);
+}
+
+.repeat-pass-group.active::before {
+    border-color: var(--accent-text);
+}
+
+/* Each side column is at least as wide as its content, so the transport
+   stays centred while there's room, then slides into the spare space beside
+   the position instead of overlapping the tempo controls. The window's
+   minimum width keeps it all on one row */
+.playback-controls {
+    display: grid;
+    grid-template-columns: minmax(max-content, 1fr) auto minmax(max-content, 1fr);
+    align-items: center;
+    gap: 16px;
+    height: 84px;
+    padding: 0 20px;
+}
+
+.control-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
+.playback-position {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+}
+
+.measure-counter {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.measure-count {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    font-family: var(--mono);
+}
+
+.measure-current {
+    font-size: 28px;
+    font-weight: 600;
+    line-height: 1;
+}
+
+.measure-total {
+    font-size: 15px;
+    color: #6b7080;
+}
+
+.repeat-pass {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 28px;
+    padding: 0 10px;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent-text);
+    font-size: 12px;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.repeat-pass-short {
+    display: none;
+}
+
+/* Short of room, the pass chip drops its words */
+@container (max-width: 903.9px) {
+    .repeat-pass-long {
+        display: none;
+    }
+
+    .repeat-pass-short {
+        display: inline;
+    }
+}
+
+.transport {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.playback-bar .transport-button {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+}
+
+.playback-bar .play-button {
+    width: 56px;
+    height: 56px;
+    margin: 0 6px;
+    border-radius: 16px;
+    background: var(--accent);
+    color: #ffffff;
+}
+
+.playback-bar .play-button:hover:not(:disabled) {
+    background: #9a7fff;
+}
+
+.tempo-control {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+}
+
+.tempo-slider {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.tempo-slider-labels {
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--muted);
+}
+
+.tempo-slider input {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 180px;
+    height: 6px;
+    margin: 0;
+    border-radius: 3px;
+    background: linear-gradient(
+        to right,
+        var(--accent) 0 var(--fill),
+        #2e323d var(--fill) 100%
+    );
+    outline: none;
+}
+
+.tempo-slider input::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #ffffff;
+    border: 3px solid var(--accent);
+    box-sizing: border-box;
+}
+
+.playback-bar .tempo-reset {
+    gap: 6px;
+    min-width: 72px;
+    height: 34px;
+    padding: 0 10px;
+    border-radius: 8px;
+    border: 1px solid #343846;
+    color: #f4f5f7;
+    font-family: var(--mono);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.tempo-reset svg {
+    color: var(--muted);
+}
+
+.playback-bar .tempo-reset:disabled {
+    cursor: default;
+}
+
+.tempo-reset:disabled svg {
+    opacity: 0.35;
+}
+
+.bpm-field {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 34px;
+    padding: 0 10px;
+    border-radius: 8px;
+    background: #0f1116;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.bpm-field input {
+    width: 40px;
+    border: none;
+    background: transparent;
+    color: #f4f5f7;
+    font-family: var(--mono);
+    font-size: 14px;
+    font-weight: 600;
+    text-align: right;
+    outline: none;
+}
+
+.bpm-field input::-webkit-inner-spin-button {
+    -webkit-appearance: none;
 }

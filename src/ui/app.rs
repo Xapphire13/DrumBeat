@@ -3,6 +3,7 @@
 use std::rc::Rc;
 
 use dioxus::prelude::*;
+use lucide_dioxus::FolderOpen;
 use midir::MidiInput;
 
 use crate::ui::{
@@ -47,7 +48,6 @@ pub fn App() -> Element {
     });
 
     rsx! {
-        {dioxus_feather_icons::sprite!()}
         document::Link { rel: "icon", href: FAVICON }
         document::Link { rel: "stylesheet", href: MAIN_CSS }
 
@@ -84,7 +84,12 @@ fn Toolbar() -> Element {
 
     rsx! {
         div { class: "toolbar",
-            button { onclick: handle_open, "Open…" }
+            button {
+                class: "open-button",
+                title: "Open a Guitar Pro 8 file",
+                onclick: handle_open,
+                FolderOpen { size: 18 }
+            }
             span { class: "score-title", "{score().title}" }
             if let Some(error) = error() {
                 span { class: "error", "{error}" }
