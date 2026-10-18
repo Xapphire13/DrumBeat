@@ -34,6 +34,9 @@ pub struct PracticeSettings {
     pub sound: Option<ClickSound>,
     pub trainer: Option<SpeedTrainer>,
     pub silent_bars: bool,
+    /// Changes whenever `bpm` is set, so the tempo reported back from before
+    /// a change can be told apart from the tempo after it
+    pub tempo_id: u32,
 }
 
 /// A click the practice metronome plays
@@ -69,10 +72,13 @@ impl Practice {
     }
 
     /// Change the settings without losing the beat. A new tempo starts the
-    /// trainer again from it
+    /// trainer again from it, and the wait for the next click is scaled to
+    /// it, so the change is heard straight away
     pub fn update(&mut self, settings: PracticeSettings) {
-        if settings.bpm != self.settings.bpm {
-            self.bpm = settings.bpm;
+        if settings.tempo_id != self.settings.tempo_id {
+            let new_bpm = settings.bpm.max(1.0);
+            self.until_next *= self.bpm.max(1.0) / new_bpm;
+            self.bpm = new_bpm;
         }
         self.settings = settings;
         if self.beat >= self.beats() {
@@ -84,6 +90,10 @@ impl Practice {
 
     pub fn bpm(&self) -> f64 {
         self.bpm
+    }
+
+    pub fn tempo_id(&self) -> u32 {
+        self.settings.tempo_id
     }
 
     pub fn sound(&self) -> Option<ClickSound> {
@@ -169,6 +179,7 @@ mod tests {
             sound: Some(ClickSound::Click),
             trainer: None,
             silent_bars: false,
+            tempo_id: 0,
         }
     }
 
@@ -231,6 +242,21 @@ mod tests {
         assert_eq!(practice.bpm(), 100.0);
         run(&mut practice, 600);
         assert_eq!(practice.bpm(), 100.0);
+    }
+
+    #[test]
+    fn a_new_tempo_is_heard_straight_away() {
+        let mut practice = Practice::new(settings());
+        // Halfway to the second beat at 60 BPM, double the tempo
+        run(&mut practice, 50);
+        practice.update(PracticeSettings {
+            bpm: 120.0,
+            tempo_id: 1,
+            ..settings()
+        });
+        let clicks = run(&mut practice, 100);
+        let samples: Vec<_> = clicks.iter().map(|(i, _)| *i).collect();
+        assert_eq!(samples, [25, 75]);
     }
 
     #[test]

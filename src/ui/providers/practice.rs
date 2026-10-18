@@ -108,8 +108,9 @@ impl Default for PracticeOptions {
 }
 
 impl PracticeOptions {
-    fn settings(&self) -> PracticeSettings {
+    fn settings(&self, tempo_id: u32) -> PracticeSettings {
         PracticeSettings {
+            tempo_id,
             bpm: f64::from(self.bpm),
             beats: self.beats.clone(),
             subdivision: self.subdivision,
@@ -135,6 +136,9 @@ pub struct PracticeMetronome {
     click: Signal<Option<ClickPosition>>,
     /// The tempo it's playing at, which the speed trainer raises
     live_bpm: Signal<u32>,
+    /// Counts changes of tempo, so the audio thread's reports of the tempo
+    /// from before the latest change are ignored rather than undoing it
+    tempo_id: Signal<u32>,
 }
 
 impl PracticeMetronome {
@@ -148,8 +152,11 @@ impl PracticeMetronome {
         change(&mut self.options.write());
         let options = self.options.peek();
         audio::set_practice_volume(options.volume as f32);
+        if options.bpm != old_bpm {
+            self.tempo_id += 1;
+        }
         if self.started_at.peek().is_some() {
-            audio::update_practice(options.settings());
+            audio::update_practice(options.settings(*self.tempo_id.peek()));
             // A new tempo starts the trainer again from it
             if options.bpm != old_bpm {
                 self.live_bpm.set(options.bpm);
@@ -167,7 +174,7 @@ impl PracticeMetronome {
         }
         let options = self.options.peek();
         audio::set_practice_volume(options.volume as f32);
-        audio::start_practice(options.settings());
+        audio::start_practice(options.settings(*self.tempo_id.peek()));
         self.live_bpm.set(options.bpm);
         self.started_at.set(Some(Instant::now()));
     }
@@ -240,6 +247,7 @@ pub fn use_practice_provider() -> PracticeMetronome {
         practised_seconds: Signal::new(0),
         click: Signal::new(None),
         live_bpm: Signal::new(0),
+        tempo_id: Signal::new(0),
     });
 
     // Bring the lights, tempo and time practised up to date with the audio
@@ -256,8 +264,9 @@ pub fn use_practice_provider() -> PracticeMetronome {
                 if click != *practice.click.peek() {
                     practice.click.set(click);
                 }
-                let bpm = audio::practice_bpm().round() as u32;
-                if bpm != *practice.live_bpm.peek() {
+                let (tempo_id, bpm) = audio::practice_bpm();
+                let bpm = bpm.round() as u32;
+                if tempo_id == *practice.tempo_id.peek() && bpm != *practice.live_bpm.peek() {
                     practice.live_bpm.set(bpm);
                 }
                 let seconds = (*practice.practised_before.peek() + started_at.elapsed()).as_secs();

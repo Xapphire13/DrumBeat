@@ -44,9 +44,15 @@ static CLICK_VOLUME: AtomicU32 = AtomicU32::new(0x3f4c_cccd); // 0.8
 /// The practice metronome's volume
 static PRACTICE_VOLUME: AtomicU32 = AtomicU32::new(0x3f4c_cccd); // 0.8
 
-/// The tempo the practice metronome is playing at, as `f64` bits, which the
-/// speed trainer raises as it goes
+/// The tempo the practice metronome is playing at, which the speed trainer
+/// raises as it goes: its settings' `tempo_id` in the high half and the BPM
+/// as `f32` bits in the low
 static PRACTICE_BPM: AtomicU64 = AtomicU64::new(0);
+
+fn report_practice_bpm(tempo_id: u32, bpm: f64) {
+    let bits = u64::from(tempo_id) << 32 | u64::from((bpm as f32).to_bits());
+    PRACTICE_BPM.store(bits, Ordering::Relaxed);
+}
 
 /// How far the volume moves towards a new setting each sample, so changing it
 /// doesn't click
@@ -117,7 +123,7 @@ pub fn set_click_volume(volume: f32) {
 
 /// Start the practice metronome, which keeps its own time
 pub fn start_practice(settings: PracticeSettings) {
-    PRACTICE_BPM.store(settings.bpm.to_bits(), Ordering::Relaxed);
+    report_practice_bpm(settings.tempo_id, settings.bpm);
     send(Command::StartPractice(settings));
 }
 
@@ -136,9 +142,11 @@ pub fn set_practice_volume(volume: f32) {
 }
 
 /// The tempo the practice metronome is playing at, which the speed trainer
-/// raises from the one it was started with
-pub fn practice_bpm() -> f64 {
-    f64::from_bits(PRACTICE_BPM.load(Ordering::Relaxed))
+/// raises from the one it was given, with the `tempo_id` of the settings
+/// that gave it. A report can lag a change of tempo by a click
+pub fn practice_bpm() -> (u32, f64) {
+    let bits = PRACTICE_BPM.load(Ordering::Relaxed);
+    ((bits >> 32) as u32, f64::from(f32::from_bits(bits as u32)))
 }
 
 /// Jump to `seconds` into the performance, while playing
@@ -542,7 +550,7 @@ impl Mixer {
         if let Some(practice) = &mut self.practice
             && let Some(click) = practice.tick(self.sample_rate)
         {
-            PRACTICE_BPM.store(practice.bpm().to_bits(), Ordering::Relaxed);
+            report_practice_bpm(practice.tempo_id(), practice.bpm());
             self.trigger_practice(click);
         }
 
