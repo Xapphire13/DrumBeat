@@ -2,7 +2,11 @@ use dioxus::prelude::*;
 use serde::Deserialize;
 
 use crate::ui::providers::{
-    playback_manager::use_playback_manager, score_manager::use_score_manager, zoom::use_zoom,
+    playback_manager::use_playback_manager,
+    practice::use_practice,
+    score_manager::use_score_manager,
+    view::{View, use_view},
+    zoom::use_zoom,
 };
 
 /// Held with Left/Right to move by measure instead of by note. Option matches
@@ -20,14 +24,14 @@ enum Modifier {
 /// keys' default actions, like scrolling the score or nudging the tempo
 /// slider, are suppressed. Escape inside the tempo popover is left to close it
 const LISTENER: &str = r#"
-const keys = new Set([" ", "ArrowLeft", "ArrowRight", "Home", "End", "m", "Escape"]);
+const keys = new Set([" ", "ArrowLeft", "ArrowRight", "Home", "End", "m", "k", "Escape"]);
 const cmdKeys = new Set(["-", "=", "+", "0"]);
 document.addEventListener("keydown", (event) => {
     if (!keys.has(event.key) && !(event.metaKey && cmdKeys.has(event.key))) return;
     const target = event.target;
     if (target instanceof HTMLTextAreaElement) return;
     if (target instanceof HTMLInputElement && target.type !== "range") return;
-    if (event.key === "Escape" && target.closest && target.closest(".tempo-popover")) return;
+    if (event.key === "Escape" && target.closest && target.closest(".tempo-popover, .metronome-popover")) return;
     event.preventDefault();
     dioxus.send({
         key: event.key,
@@ -72,16 +76,25 @@ impl KeyPress {
 
 /// Space plays and pauses, Left/Right step between notes, the measure
 /// modifier with Left/Right steps between measures, and Home/End jump to the
-/// start and end of the score, M mutes, Escape stops looping, and Cmd with
-/// -, = (or +) and 0 zoom out, in and back to 100%
+/// start and end of the score, M mutes, K turns the metronome's click on and
+/// off, Escape stops looping, and Cmd with -, = (or +) and 0 zoom out, in and
+/// back to 100%. On the practice metronome, Space starts and stops it
 pub fn use_keyboard_shortcuts() {
     let mut playback_manager = use_playback_manager();
     let score = use_score_manager();
     let mut zoom = use_zoom();
+    let mut practice = use_practice();
+    let view = use_view();
 
     use_future(move || async move {
         let mut listener = document::eval(LISTENER);
         while let Ok(press) = listener.recv::<KeyPress>().await {
+            if *view.peek() == View::Metronome {
+                if press.key == " " && press.no_modifiers() && !press.repeat {
+                    practice.toggle();
+                }
+                continue;
+            }
             let score = score.read();
             match press.key.as_str() {
                 // Holding space shouldn't keep toggling
@@ -105,6 +118,9 @@ pub fn use_keyboard_shortcuts() {
                 "Home" if press.no_modifiers() => playback_manager.skip_to_start(&score),
                 "End" if press.no_modifiers() => playback_manager.skip_to_end(&score),
                 "m" if press.no_modifiers() && !press.repeat => playback_manager.toggle_mute(),
+                "k" if press.no_modifiers() && !press.repeat => {
+                    playback_manager.toggle_metronome(&score);
+                }
                 "Escape" if press.no_modifiers() => playback_manager.clear_loop(),
                 "-" if press.cmd() => zoom.zoom_out(),
                 "=" | "+" if press.cmd() => zoom.zoom_in(),

@@ -1,5 +1,6 @@
 use std::f32::consts::TAU;
 
+use super::click::ClickSound;
 use crate::data::{drum_piece::DrumPiece, note::Articulation};
 
 /// A synthesized drum sound
@@ -19,6 +20,11 @@ pub enum Sound {
     RideBell,
     China,
     Splash,
+    /// A metronome click, pitched up when accented
+    Click {
+        sound: ClickSound,
+        accent: bool,
+    },
 }
 
 impl Sound {
@@ -64,6 +70,12 @@ impl Sound {
             Sound::Splash => 0.45,
             Sound::Ride => 0.35,
             Sound::RideBell => 0.4,
+            Sound::Click { sound, .. } => match sound {
+                ClickSound::Click => 0.7,
+                ClickSound::Wood => 0.9,
+                ClickSound::Rim => 1.0,
+                ClickSound::Cowbell => 0.8,
+            },
         }
     }
 
@@ -84,6 +96,20 @@ impl Sound {
             Sound::Splash => 0.35,
             Sound::Ride => 0.6,
             Sound::RideBell => 0.5,
+            Sound::Click { sound, .. } => match sound {
+                ClickSound::Click => 0.012,
+                ClickSound::Wood => 0.03,
+                ClickSound::Rim => 0.025,
+                ClickSound::Cowbell => 0.08,
+            },
+        }
+    }
+
+    /// How much higher an accented click is played
+    fn pitch(self) -> f32 {
+        match self {
+            Sound::Click { accent: true, .. } => 1.5,
+            _ => 1.0,
         }
     }
 }
@@ -123,6 +149,15 @@ impl Voice {
             Sound::China => Biquad::bandpass(sample_rate, 3000.0, 1.0),
             Sound::Ride => Biquad::bandpass(sample_rate, 5000.0, 0.8),
             Sound::RideBell => Biquad::bandpass(sample_rate, 2500.0, 2.0),
+            Sound::Click { sound: click, .. } => {
+                let pitch = sound.pitch();
+                match click {
+                    ClickSound::Click => Biquad::passthrough(),
+                    ClickSound::Wood => Biquad::bandpass(sample_rate, 1100.0 * pitch, 6.0),
+                    ClickSound::Rim => Biquad::bandpass(sample_rate, 2400.0 * pitch, 1.5),
+                    ClickSound::Cowbell => Biquad::bandpass(sample_rate, 900.0 * pitch, 1.2),
+                }
+            }
             // Unused by the drums
             Sound::Kick | Sound::Tom1 | Sound::Tom2 | Sound::FloorTom => Biquad::passthrough(),
         };
@@ -182,6 +217,41 @@ impl Voice {
                 let tone = self.sine(pitch * (1.0 + 0.5 * decay(t, 0.05)));
                 let stick = self.noise.next() * decay(t, 0.004) * 0.2;
                 tone * decay(t, self.sound.decay()) + stick
+            }
+            Sound::Click { sound: click, .. } => {
+                let pitch = self.sound.pitch();
+                let envelope = decay(t, self.sound.decay());
+                match click {
+                    // A short, bright beep
+                    ClickSound::Click => {
+                        let tone = self.sine(1600.0 * pitch) * envelope;
+                        let tick = self.noise.next() * decay(t, 0.001) * 0.3;
+                        tone + tick
+                    }
+                    // A hollow knock: a ringing tone over a resonant tap
+                    ClickSound::Wood => {
+                        let tone = self.sine(1100.0 * pitch) * envelope * 0.7;
+                        let tap = self.filter.process(self.noise.next()) * decay(t, 0.01) * 3.0;
+                        tone + tap
+                    }
+                    // The stick across the rim: a crack of noise with a
+                    // little body
+                    ClickSound::Rim => {
+                        let crack = self.filter.process(self.noise.next()) * envelope * 2.0;
+                        let body = self.sine(500.0 * pitch) * decay(t, 0.012) * 0.5;
+                        crack + body
+                    }
+                    // The 808's cowbell: two square waves, filtered
+                    ClickSound::Cowbell => {
+                        let mut squares = 0.0;
+                        for (phase, frequency) in self.metal_phases.iter_mut().zip([540.0, 800.0]) {
+                            *phase = (*phase + frequency * pitch / self.sample_rate).fract();
+                            squares += if *phase < 0.5 { 0.5 } else { -0.5 };
+                        }
+                        let envelope = 0.6 * envelope + 0.4 * decay(t, 0.015);
+                        self.filter.process(squares) * envelope * 2.0
+                    }
+                }
             }
             _ => {
                 // Cymbals: metallic squares and noise, filtered to the
@@ -344,6 +414,22 @@ mod tests {
             Sound::RideBell,
             Sound::China,
             Sound::Splash,
+            Sound::Click {
+                sound: ClickSound::Click,
+                accent: true,
+            },
+            Sound::Click {
+                sound: ClickSound::Wood,
+                accent: false,
+            },
+            Sound::Click {
+                sound: ClickSound::Rim,
+                accent: true,
+            },
+            Sound::Click {
+                sound: ClickSound::Cowbell,
+                accent: false,
+            },
         ];
         for sound in sounds {
             let mut voice = Voice::new(sound, 1.0, SAMPLE_RATE, 1);

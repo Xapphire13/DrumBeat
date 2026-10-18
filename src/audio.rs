@@ -4,7 +4,7 @@
 
 use std::sync::{
     OnceLock,
-    atomic::{AtomicU32, Ordering},
+    atomic::{AtomicU32, AtomicU64, Ordering},
     mpsc::{self, Receiver, Sender},
 };
 
@@ -13,11 +13,20 @@ use cpal::{
     traits::{DeviceTrait, HostTrait, StreamTrait},
 };
 
+mod click;
 mod hits;
+mod practice;
 mod voice;
 
+use click::ClickKind;
+pub use click::{
+    Click, ClickPosition, ClickSound, MetronomeSettings, Subdivision, count_in_clicks,
+    score_clicks, status as click_status,
+};
 pub use hits::{Hit, score_hits};
-use voice::Voice;
+pub use practice::{BeatKind, PracticeSettings, SILENT_BAR_EVERY, SpeedTrainer};
+use practice::{Practice, PracticeClick};
+use voice::{Sound, Voice};
 
 /// The most voices that ring at once. The oldest is dropped past this
 const MAX_VOICES: usize = 64;
@@ -29,6 +38,16 @@ const MASTER_GAIN: f32 = 0.5;
 /// channel so setting it doesn't open the output device
 static VOLUME: AtomicU32 = AtomicU32::new(0x3f80_0000); // 1.0
 
+/// The metronome's volume over the score, kept apart from the music's
+static CLICK_VOLUME: AtomicU32 = AtomicU32::new(0x3f4c_cccd); // 0.8
+
+/// The practice metronome's volume
+static PRACTICE_VOLUME: AtomicU32 = AtomicU32::new(0x3f4c_cccd); // 0.8
+
+/// The tempo the practice metronome is playing at, as `f64` bits, which the
+/// speed trainer raises as it goes
+static PRACTICE_BPM: AtomicU64 = AtomicU64::new(0);
+
 /// How far the volume moves towards a new setting each sample, so changing it
 /// doesn't click
 const VOLUME_SMOOTHING: f32 = 0.002;
@@ -37,6 +56,7 @@ enum Command {
     /// Start playing `hits` from `from_seconds` into the performance
     Play {
         hits: Vec<Hit>,
+        metronome: Metronome,
         from_seconds: f64,
         speed: f64,
         loop_seconds: Option<(f64, f64)>,
@@ -44,19 +64,81 @@ enum Command {
     Seek(f64),
     SetLoop(Option<(f64, f64)>),
     SetSpeed(f64),
+    SetClicks {
+        clicks: Vec<Click>,
+        sound: ClickSound,
+    },
     Stop,
+    StartPractice(PracticeSettings),
+    UpdatePractice(PracticeSettings),
+    StopPractice,
+}
+
+/// The metronome's part in playing the score
+#[derive(Default)]
+pub struct Metronome {
+    /// Clicks along with the score, sorted by time on the same timeline as
+    /// its hits. Empty with the click off
+    pub clicks: Vec<Click>,
+    /// Clicks played before the score starts, timed in seconds (at the
+    /// score's tempo) back from where it does, so all before 0
+    pub count_in: Vec<Click>,
+    pub sound: ClickSound,
 }
 
 /// Start playing `hits`, sorted by time, from `from_seconds` into the
-/// performance at the score's own tempo. `speed` multiplies that tempo.
-/// See `set_loop` for `loop_seconds`
-pub fn play(hits: Vec<Hit>, from_seconds: f64, speed: f64, loop_seconds: Option<(f64, f64)>) {
+/// performance at the score's own tempo, after the metronome's count-in.
+/// `speed` multiplies that tempo. See `set_loop` for `loop_seconds`
+pub fn play(
+    hits: Vec<Hit>,
+    metronome: Metronome,
+    from_seconds: f64,
+    speed: f64,
+    loop_seconds: Option<(f64, f64)>,
+) {
     send(Command::Play {
         hits,
+        metronome,
         from_seconds,
         speed,
         loop_seconds,
     });
+}
+
+/// Change the metronome's clicks while the score plays. Empty turns it off
+pub fn set_clicks(clicks: Vec<Click>, sound: ClickSound) {
+    send(Command::SetClicks { clicks, sound });
+}
+
+/// Set the metronome's volume over the score, from 0 to 1
+pub fn set_click_volume(volume: f32) {
+    CLICK_VOLUME.store(volume.clamp(0.0, 1.0).to_bits(), Ordering::Relaxed);
+}
+
+/// Start the practice metronome, which keeps its own time
+pub fn start_practice(settings: PracticeSettings) {
+    PRACTICE_BPM.store(settings.bpm.to_bits(), Ordering::Relaxed);
+    send(Command::StartPractice(settings));
+}
+
+/// Change the practice metronome's settings while it plays, keeping the beat
+pub fn update_practice(settings: PracticeSettings) {
+    send(Command::UpdatePractice(settings));
+}
+
+pub fn stop_practice() {
+    send(Command::StopPractice);
+}
+
+/// Set the practice metronome's volume, from 0 to 1
+pub fn set_practice_volume(volume: f32) {
+    PRACTICE_VOLUME.store(volume.clamp(0.0, 1.0).to_bits(), Ordering::Relaxed);
+}
+
+/// The tempo the practice metronome is playing at, which the speed trainer
+/// raises from the one it was started with
+pub fn practice_bpm() -> f64 {
+    f64::from_bits(PRACTICE_BPM.load(Ordering::Relaxed))
 }
 
 /// Jump to `seconds` into the performance, while playing
@@ -172,12 +254,16 @@ where
                 while let Ok(command) = commands.try_recv() {
                     mixer.handle(command);
                 }
-                mixer.target_volume = f32::from_bits(VOLUME.load(Ordering::Relaxed));
+                for bus in mixer.buses_mut() {
+                    bus.load_volume();
+                }
                 for frame in data.chunks_mut(channels) {
                     let sample = T::from_sample(mixer.next_sample());
                     frame.fill(sample);
                 }
-                mixer.voices.retain(|voice| !voice.is_finished());
+                for bus in mixer.buses_mut() {
+                    bus.voices.retain(|voice| !voice.is_finished());
+                }
             },
             |error| eprintln!("Audio stream error: {error}"),
             None,
@@ -197,6 +283,62 @@ pub fn wrap_into_loop(seconds: f64, start: f64, end: f64) -> f64 {
     start + (seconds - start).rem_euclid(end - start)
 }
 
+/// Voices mixed together under one volume
+struct Bus {
+    voices: Vec<Voice>,
+    /// The gain applied to the bus, easing towards `target_volume`
+    volume: f32,
+    target_volume: f32,
+    /// Where the volume is set from
+    setting: &'static AtomicU32,
+}
+
+impl Bus {
+    fn new(setting: &'static AtomicU32) -> Self {
+        let volume = f32::from_bits(setting.load(Ordering::Relaxed));
+        Self {
+            voices: Vec::with_capacity(MAX_VOICES),
+            volume,
+            target_volume: volume,
+            setting,
+        }
+    }
+
+    fn load_volume(&mut self) {
+        self.target_volume = f32::from_bits(self.setting.load(Ordering::Relaxed));
+    }
+
+    fn push(&mut self, voice: Voice) {
+        if self.voices.len() >= MAX_VOICES {
+            self.voices.remove(0);
+        }
+        self.voices.push(voice);
+    }
+
+    /// A quick fade on every voice rather than silence, which would click
+    fn choke(&mut self) {
+        for voice in &mut self.voices {
+            voice.choke();
+        }
+    }
+
+    fn next_sample(&mut self) -> f32 {
+        let mix: f32 = self.voices.iter_mut().map(Voice::next_sample).sum();
+        self.volume += (self.target_volume - self.volume) * VOLUME_SMOOTHING;
+        // Squared, since loudness is heard on a roughly logarithmic scale
+        (mix * MASTER_GAIN).tanh() * self.volume * self.volume
+    }
+}
+
+/// The count-in before the score plays
+struct CountIn {
+    clicks: Vec<Click>,
+    /// Index into `clicks` of the next one to play
+    next_click: usize,
+    /// Seconds (at the score's tempo) until the score starts, negative
+    seconds: f64,
+}
+
 /// Runs on the audio thread: triggers hits as their time comes and mixes the
 /// voices that are sounding
 struct Mixer {
@@ -204,18 +346,26 @@ struct Mixer {
     hits: Vec<Hit>,
     /// Index into `hits` of the next one to play
     next_hit: usize,
+    /// The metronome's clicks over the score, on the same timeline as `hits`
+    clicks: Vec<Click>,
+    next_click: usize,
+    click_sound: ClickSound,
+    /// Set while counting in, when the score waits at `position`
+    count_in: Option<CountIn>,
     /// Seconds into the performance at the score's own tempo
     position: f64,
     speed: f64,
     playing: bool,
     /// Where playback jumps back from and to, in seconds into the performance
     loop_seconds: Option<(f64, f64)>,
-    voices: Vec<Voice>,
+    music: Bus,
+    /// The metronome over the score, and its count-in
+    click_bus: Bus,
+    practice_bus: Bus,
+    /// Set while the practice metronome is going
+    practice: Option<Practice>,
     /// Changes for every voice, so overlapping hits don't share their noise
     seed: u32,
-    /// The gain applied to the mix, easing towards `target_volume`
-    volume: f32,
-    target_volume: f32,
 }
 
 impl Mixer {
@@ -224,40 +374,80 @@ impl Mixer {
             sample_rate,
             hits: vec![],
             next_hit: 0,
+            clicks: vec![],
+            next_click: 0,
+            click_sound: ClickSound::default(),
+            count_in: None,
             position: 0.0,
             speed: 1.0,
             playing: false,
             loop_seconds: None,
-            voices: Vec::with_capacity(MAX_VOICES),
+            music: Bus::new(&VOLUME),
+            click_bus: Bus::new(&CLICK_VOLUME),
+            practice_bus: Bus::new(&PRACTICE_VOLUME),
+            practice: None,
             seed: 1,
-            volume: 1.0,
-            target_volume: 1.0,
         }
+    }
+
+    fn buses_mut(&mut self) -> [&mut Bus; 3] {
+        [&mut self.music, &mut self.click_bus, &mut self.practice_bus]
     }
 
     fn handle(&mut self, command: Command) {
         match command {
             Command::Play {
                 hits,
+                metronome,
                 from_seconds,
                 speed,
                 loop_seconds,
             } => {
                 self.hits = hits;
+                self.clicks = metronome.clicks;
+                self.click_sound = metronome.sound;
                 self.speed = speed;
                 self.loop_seconds = loop_seconds;
                 self.playing = true;
                 self.seek(from_seconds);
+                if let Some(first) = metronome.count_in.first() {
+                    self.count_in = Some(CountIn {
+                        seconds: first.seconds,
+                        clicks: metronome.count_in,
+                        next_click: 0,
+                    });
+                }
             }
             Command::Seek(seconds) => self.seek(seconds),
             Command::SetLoop(loop_seconds) => self.loop_seconds = loop_seconds,
             Command::SetSpeed(speed) => self.speed = speed,
+            Command::SetClicks { clicks, sound } => {
+                self.clicks = clicks;
+                self.click_sound = sound;
+                self.next_click = self.clicks.partition_point(|c| c.seconds < self.position);
+                if self.clicks.is_empty() && self.count_in.is_none() {
+                    click::publish(None);
+                }
+            }
             Command::Stop => {
                 self.playing = false;
-                // A quick fade rather than silence, which would click
-                for voice in &mut self.voices {
-                    voice.choke();
+                self.count_in = None;
+                click::publish(None);
+                self.music.choke();
+                self.click_bus.choke();
+            }
+            Command::StartPractice(settings) => {
+                self.practice = Some(Practice::new(settings));
+            }
+            Command::UpdatePractice(settings) => {
+                if let Some(practice) = &mut self.practice {
+                    practice.update(settings);
                 }
+            }
+            Command::StopPractice => {
+                self.practice = None;
+                click::publish(None);
+                self.practice_bus.choke();
             }
         }
     }
@@ -266,6 +456,11 @@ impl Mixer {
         self.position = seconds;
         // A hit right on the new position is played
         self.next_hit = self.hits.partition_point(|hit| hit.seconds < seconds);
+        self.next_click = self.clicks.partition_point(|click| click.seconds < seconds);
+        // Moving the playhead cuts the count-in short
+        if self.count_in.take().is_some() && self.clicks.is_empty() {
+            click::publish(None);
+        }
     }
 
     /// The next hit whose time has come, if any, which is then counted as
@@ -279,6 +474,15 @@ impl Mixer {
         Some(hit)
     }
 
+    fn next_due_click(&mut self) -> Option<Click> {
+        let click = *self.clicks.get(self.next_click)?;
+        if click.seconds > self.position {
+            return None;
+        }
+        self.next_click += 1;
+        Some(click)
+    }
+
     /// Move on by one sample, going round the loop at its end
     fn advance(&mut self) {
         self.position += self.speed / self.sample_rate;
@@ -290,45 +494,116 @@ impl Mixer {
             // a plain seek would skip the hits right on it, dropping the
             // loop's first note every time round
             self.next_hit = self.hits.partition_point(|hit| hit.seconds < start);
+            self.next_click = self.clicks.partition_point(|click| click.seconds < start);
+        }
+    }
+
+    /// Move the count-in on by one sample, playing its clicks as they come
+    /// and ending it once the score's time comes
+    fn count_in(&mut self) {
+        let Some(count_in) = &mut self.count_in else {
+            return;
+        };
+        let mut due = None;
+        if let Some(click) = count_in.clicks.get(count_in.next_click)
+            && click.seconds <= count_in.seconds
+        {
+            count_in.next_click += 1;
+            due = Some(*click);
+        }
+        count_in.seconds += self.speed / self.sample_rate;
+        let finished = count_in.seconds >= 0.0;
+        if let Some(click) = due {
+            self.trigger_click(click);
+        }
+        if finished {
+            self.count_in = None;
+            if self.clicks.is_empty() {
+                click::publish(None);
+            }
         }
     }
 
     fn next_sample(&mut self) -> f32 {
         if self.playing {
-            while let Some(hit) = self.next_due_hit() {
-                self.trigger(hit);
+            if self.count_in.is_some() {
+                self.count_in();
+            } else {
+                while let Some(hit) = self.next_due_hit() {
+                    self.trigger(hit);
+                }
+                while let Some(click) = self.next_due_click() {
+                    self.trigger_click(click);
+                }
+                self.advance();
             }
-            self.advance();
         }
 
-        let mix: f32 = self.voices.iter_mut().map(Voice::next_sample).sum();
-        self.volume += (self.target_volume - self.volume) * VOLUME_SMOOTHING;
-        // Squared, since loudness is heard on a roughly logarithmic scale
-        (mix * MASTER_GAIN).tanh() * self.volume * self.volume
+        if let Some(practice) = &mut self.practice
+            && let Some(click) = practice.tick(self.sample_rate)
+        {
+            PRACTICE_BPM.store(practice.bpm().to_bits(), Ordering::Relaxed);
+            self.trigger_practice(click);
+        }
+
+        let mix = self.music.next_sample()
+            + self.click_bus.next_sample()
+            + self.practice_bus.next_sample();
+        mix.clamp(-1.0, 1.0)
+    }
+
+    fn next_seed(&mut self) -> u32 {
+        self.seed = self
+            .seed
+            .wrapping_mul(1_664_525)
+            .wrapping_add(1_013_904_223);
+        self.seed
     }
 
     fn trigger(&mut self, hit: Hit) {
         if hit.sound.is_hihat() {
             // A new stroke on the hi-hat stops it ringing open
-            for voice in &mut self.voices {
+            for voice in &mut self.music.voices {
                 if voice.sound().is_hihat() {
                     voice.choke();
                 }
             }
         }
-        if self.voices.len() >= MAX_VOICES {
-            self.voices.remove(0);
-        }
-        self.seed = self
-            .seed
-            .wrapping_mul(1_664_525)
-            .wrapping_add(1_013_904_223);
-        self.voices.push(Voice::new(
+        let seed = self.next_seed();
+        self.music.push(Voice::new(
             hit.sound,
             hit.velocity,
             self.sample_rate as f32,
-            self.seed,
+            seed,
         ));
+    }
+
+    fn trigger_click(&mut self, click: Click) {
+        click::publish(Some(click.position));
+        let voice = self.click_voice(self.click_sound, click.kind);
+        self.click_bus.push(voice);
+    }
+
+    fn trigger_practice(&mut self, click: PracticeClick) {
+        click::publish(Some(click.position));
+        let sound = self.practice.as_ref().and_then(Practice::sound);
+        if let (Some(kind), Some(sound)) = (click.kind, sound) {
+            let voice = self.click_voice(sound, kind);
+            self.practice_bus.push(voice);
+        }
+    }
+
+    fn click_voice(&mut self, sound: ClickSound, kind: ClickKind) -> Voice {
+        let seed = self.next_seed();
+        Voice::new(
+            Sound::Click {
+                sound,
+                accent: kind == ClickKind::Accent,
+            },
+            kind.velocity(),
+            self.sample_rate as f32,
+            seed,
+        )
     }
 }
 
@@ -364,6 +639,7 @@ mod tests {
         let mut mixer = Mixer::new(1000.0);
         mixer.handle(Command::Play {
             hits: vec![hit(0.0), hit(0.25), hit(0.5), hit(1.0)],
+            metronome: Metronome::default(),
             from_seconds: 0.25,
             speed: 1.0,
             loop_seconds: Some((0.25, 1.0)),
@@ -376,11 +652,44 @@ mod tests {
     }
 
     #[test]
+    fn count_in_holds_the_score_back() {
+        let click = |seconds| Click {
+            seconds,
+            kind: ClickKind::Beat,
+            position: ClickPosition::default(),
+        };
+        // 1000 samples a second, so the count-in is 500 samples long
+        let mut mixer = Mixer::new(1000.0);
+        mixer.handle(Command::Play {
+            hits: vec![hit(0.5), hit(1.0)],
+            metronome: Metronome {
+                count_in: vec![click(-0.5), click(-0.25)],
+                ..Metronome::default()
+            },
+            from_seconds: 1.0,
+            speed: 1.0,
+            loop_seconds: None,
+        });
+
+        for _ in 0..495 {
+            mixer.next_sample();
+        }
+        assert_eq!(mixer.click_bus.voices.len(), 2);
+        assert!(mixer.music.voices.is_empty());
+        for _ in 0..10 {
+            mixer.next_sample();
+        }
+        // Only the hit where playback starts, not the one before it
+        assert_eq!(mixer.music.voices.len(), 1);
+    }
+
+    #[test]
     fn wrap_keeps_time() {
         // A loop that isn't a whole number of samples long
         let mut mixer = Mixer::new(1000.0);
         mixer.handle(Command::Play {
             hits: vec![],
+            metronome: Metronome::default(),
             from_seconds: 0.0,
             speed: 1.0,
             loop_seconds: Some((0.0, 0.0105)),

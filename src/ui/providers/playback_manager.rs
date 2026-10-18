@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 use dioxus::{core::Task, prelude::*};
 
 use crate::{
-    audio::{self, wrap_into_loop},
+    audio::{self, ClickPosition, MetronomeSettings, wrap_into_loop},
     data::{loop_range::LoopRange, score::Score},
 };
 
@@ -37,20 +37,31 @@ pub struct PlaybackState {
     last_seek_on_score: bool,
     /// Set while the score is playing
     clock: Option<PlaybackClock>,
+    metronome: MetronomeSettings,
+    /// Where the metronome's last click fell, as the audio thread played it
+    click: Option<ClickPosition>,
 }
 
 /// Ties the playhead to real time: `start_seconds` into the performance (at
-/// the score's own tempo) was reached at `started_at`
+/// the score's own tempo) was reached at `started_at`. While counting in,
+/// `start_seconds` is before where the score starts, at `floor_seconds`,
+/// and the playhead waits there
 #[derive(Clone, Copy)]
 struct PlaybackClock {
     started_at: Instant,
     start_seconds: f64,
+    floor_seconds: f64,
     task: Task,
 }
 
 impl PlaybackClock {
     /// Seconds into the performance at the score's own tempo
     fn seconds(&self, speed: f64) -> f64 {
+        self.unclamped_seconds(speed).max(self.floor_seconds)
+    }
+
+    /// Seconds into the performance, counting back through the count-in
+    fn unclamped_seconds(&self, speed: f64) -> f64 {
         self.start_seconds + self.started_at.elapsed().as_secs_f64() * speed
     }
 }
@@ -67,6 +78,8 @@ pub fn use_playback_manager_provider() {
             seeks: 0,
             last_seek_on_score: false,
             clock: None,
+            metronome: MetronomeSettings::default(),
+            click: None,
         })
     });
 }
@@ -109,6 +122,7 @@ impl PlaybackManager {
         if let Some(clock) = &mut state.clock {
             clock.started_at = Instant::now();
             clock.start_seconds = score.performance.tempo_map().ticks_to_seconds(timestamp);
+            clock.floor_seconds = clock.start_seconds;
             audio::seek(clock.start_seconds);
         }
     }
@@ -171,7 +185,7 @@ impl PlaybackManager {
         let old_speed = state.speed;
         // Restart the clock from where it is now, so the playhead doesn't jump
         if let Some(clock) = &mut state.clock {
-            clock.start_seconds = clock.seconds(old_speed);
+            clock.start_seconds = clock.unclamped_seconds(old_speed);
             clock.started_at = Instant::now();
         }
         if state.clock.is_some() {
@@ -202,6 +216,43 @@ impl PlaybackManager {
         let mut state = self.state.write();
         state.muted = !state.muted;
         apply_volume(&state);
+    }
+
+    pub fn metronome(&self) -> MetronomeSettings {
+        (self.state)().metronome
+    }
+
+    /// Change how the metronome plays along, straight away if the score is
+    /// playing
+    pub fn set_metronome(&mut self, settings: MetronomeSettings, score: &Score) {
+        let mut state = self.state.write();
+        audio::set_click_volume(settings.volume as f32);
+        let old = &state.metronome;
+        let clicks_changed = old.enabled != settings.enabled
+            || old.sound != settings.sound
+            || old.subdivision != settings.subdivision
+            || old.accent_first != settings.accent_first;
+        if state.clock.is_some() && clicks_changed {
+            let clicks = if settings.enabled {
+                audio::score_clicks(score, &settings)
+            } else {
+                vec![]
+            };
+            audio::set_clicks(clicks, settings.sound);
+        }
+        state.metronome = settings;
+    }
+
+    pub fn toggle_metronome(&mut self, score: &Score) {
+        let mut settings = self.state.peek().metronome.clone();
+        settings.enabled = !settings.enabled;
+        self.set_metronome(settings, score);
+    }
+
+    /// Where the metronome's last click fell, while it's clicking or
+    /// counting in
+    pub fn click(&self) -> Option<ClickPosition> {
+        (self.state)().click
     }
 
     /// Start moving the playhead in real time, following the score's tempo
@@ -251,18 +302,34 @@ impl PlaybackManager {
                 if timestamp >= f64::from(end_timestamp) {
                     // Finished: rewind so the next play starts from the top
                     state.clock = None;
+                    state.click = None;
                     audio::stop();
                     state.performance_timestamp = 0;
                     state.playhead_timestamp = 0;
                     break;
                 }
+                // The beat is lit from the click that was heard
+                state.click = audio::click_status();
                 state.performance_timestamp = timestamp as u32;
                 state.playhead_timestamp = performance.to_written(timestamp as u32);
             }
         });
 
+        let metronome = state.peek().metronome.clone();
+        let count_in = audio::count_in_clicks(score, start_timestamp, &metronome);
+        // The playhead waits at the start while the count-in plays
+        let count_in_seconds = count_in.first().map_or(0.0, |click| -click.seconds);
         audio::play(
             audio::score_hits(score),
+            audio::Metronome {
+                clicks: if metronome.enabled {
+                    audio::score_clicks(score, &metronome)
+                } else {
+                    vec![]
+                },
+                count_in,
+                sound: metronome.sound,
+            },
             start_seconds,
             state.peek().speed,
             loop_range.map(|range| loop_seconds(range, score)),
@@ -273,16 +340,19 @@ impl PlaybackManager {
         state.playhead_timestamp = score.performance.to_written(start_timestamp);
         state.clock = Some(PlaybackClock {
             started_at: Instant::now(),
-            start_seconds,
+            start_seconds: start_seconds - count_in_seconds,
+            floor_seconds: start_seconds,
             task,
         });
     }
 
     /// Stop moving the playhead, leaving it where it is
     pub fn pause(&mut self) {
-        if let Some(clock) = self.state.write().clock.take() {
+        let mut state = self.state.write();
+        if let Some(clock) = state.clock.take() {
             clock.task.cancel();
             audio::stop();
+            state.click = None;
         }
     }
 

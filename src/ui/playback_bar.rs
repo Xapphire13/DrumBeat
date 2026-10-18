@@ -45,6 +45,11 @@ pub fn PlaybackBar() -> Element {
         )
     };
 
+    // While counting in, the measure readout counts the beats instead
+    let count_in = playback_manager
+        .click()
+        .filter(|click| click.count_in && playback_manager.is_playing());
+
     let speed = playback_manager.speed();
     // Wall-clock time at the current speed, through every repeat. Tempo
     // changes are already in the performance's tempo map
@@ -182,14 +187,35 @@ pub fn PlaybackBar() -> Element {
 
             div { class: "playback-controls",
                 div { class: "playback-position",
-                    div { class: "measure-counter",
-                        span { class: "control-label", "Measure" }
-                        div { class: "measure-count",
-                            span { class: "measure-current", "{played_index + 1}" }
-                            span { class: "measure-total", "/ {number_of_measures}" }
+                    if let Some(click) = count_in {
+                        div { class: "measure-counter",
+                            span { class: "control-label count-in-label", "Count-in" }
+                            div { class: "measure-count",
+                                span {
+                                    class: if click.beat == 0 { "measure-current count-in-beat first" } else { "measure-current count-in-beat" },
+                                    "{click.beat + 1}"
+                                }
+                                span { class: "measure-total", "/ {click.beats}" }
+                            }
+                        }
+                    } else {
+                        div { class: "measure-counter",
+                            span { class: "control-label", "Measure" }
+                            div { class: "measure-count",
+                                span { class: "measure-current", "{played_index + 1}" }
+                                span { class: "measure-total", "/ {number_of_measures}" }
+                            }
                         }
                     }
-                    if passes > 1 {
+                    if passes > 1 && count_in.is_some() {
+                        span {
+                            class: "repeat-pass",
+                            title: "Where playback starts after the count-in",
+                            Repeat { size: 13 }
+                            span { class: "repeat-pass-long", "Then measure {played_index + 1}" }
+                            span { class: "repeat-pass-short", "→ {played_index + 1}" }
+                        }
+                    } else if passes > 1 {
                         span {
                             class: "repeat-pass",
                             title: "Time through the repeat",
@@ -340,7 +366,7 @@ pub fn PlaybackBar() -> Element {
 }
 
 /// Seconds as m:ss, or h:mm:ss from an hour up
-fn format_time(seconds: f64) -> String {
+pub fn format_time(seconds: f64) -> String {
     // Truncated, so the elapsed time ticks over on the second
     let seconds = seconds.max(0.0) as u64;
     let (hours, minutes, seconds) = (seconds / 3600, seconds / 60 % 60, seconds % 60);
