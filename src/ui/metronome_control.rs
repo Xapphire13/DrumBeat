@@ -92,7 +92,7 @@ pub fn MetronomeControl() -> Element {
                     aria_haspopup: "dialog",
                     aria_expanded: open(),
                     onclick: move |_| open.toggle(),
-                    ChevronDown { size: 14 }
+                    ChevronDown { size: 14, class: "popover-chevron" }
                 }
             }
             if open() {

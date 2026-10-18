@@ -262,7 +262,7 @@ pub fn PlaybackBar() -> Element {
                             Gauge { size: 16 }
                             span { class: "tempo-chip-speed", "{speed_percent}%" }
                             span { class: "tempo-chip-bpm", "{bpm} BPM" }
-                            ChevronUp { size: 14 }
+                            ChevronUp { size: 14, class: "popover-chevron" }
                         }
                         if tempo_open() {
                             // Clicking anywhere outside the popover closes it

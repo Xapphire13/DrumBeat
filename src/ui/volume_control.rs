@@ -163,7 +163,7 @@ pub fn VolumeControl() -> Element {
                 aria_haspopup: "dialog",
                 aria_expanded: open(),
                 onclick: handle_toggle_menu,
-                ChevronUp { size: 14 }
+                ChevronUp { size: 14, class: "popover-chevron" }
             }
             if open() {
                 // Clicking anywhere outside the popover closes it

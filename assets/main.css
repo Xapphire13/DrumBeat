@@ -1494,3 +1494,18 @@ button.switch:focus-visible {
 .inline-number::-webkit-inner-spin-button {
     -webkit-appearance: none;
 }
+
+/* A popover's chevron flips while its menu is open */
+.popover-chevron {
+    transition: transform 0.18s ease;
+}
+
+[aria-expanded="true"] > .popover-chevron {
+    transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .popover-chevron {
+        transition: none;
+    }
+}
