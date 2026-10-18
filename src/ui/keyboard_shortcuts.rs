@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 use serde::Deserialize;
 
 use crate::ui::providers::{
-    playback_manager::use_playback_manager, score_manager::use_score_manager,
+    playback_manager::use_playback_manager, score_manager::use_score_manager, zoom::use_zoom,
 };
 
 /// Held with Left/Right to move by measure instead of by note. Option matches
@@ -21,8 +21,9 @@ enum Modifier {
 /// slider, are suppressed
 const LISTENER: &str = r#"
 const keys = new Set([" ", "ArrowLeft", "ArrowRight", "Home", "End", "m"]);
+const cmdKeys = new Set(["-", "=", "+", "0"]);
 document.addEventListener("keydown", (event) => {
-    if (!keys.has(event.key)) return;
+    if (!keys.has(event.key) && !(event.metaKey && cmdKeys.has(event.key))) return;
     const target = event.target;
     if (target instanceof HTMLTextAreaElement) return;
     if (target instanceof HTMLInputElement && target.type !== "range") return;
@@ -58,6 +59,11 @@ impl KeyPress {
         !self.ctrl && !self.shift && self.alt == alt && self.meta == meta
     }
 
+    /// Whether Cmd is held, ignoring Shift, which some layouts need for "+"
+    fn cmd(&self) -> bool {
+        self.meta && !self.ctrl && !self.alt
+    }
+
     fn no_modifiers(&self) -> bool {
         !(self.alt || self.meta || self.ctrl || self.shift)
     }
@@ -65,10 +71,12 @@ impl KeyPress {
 
 /// Space plays and pauses, Left/Right step between notes, the measure
 /// modifier with Left/Right steps between measures, and Home/End jump to the
-/// start and end of the score, and M mutes
+/// start and end of the score, M mutes, and Cmd with -, = (or +) and 0 zoom
+/// out, in and back to 100%
 pub fn use_keyboard_shortcuts() {
     let mut playback_manager = use_playback_manager();
     let score = use_score_manager();
+    let mut zoom = use_zoom();
 
     use_future(move || async move {
         let mut listener = document::eval(LISTENER);
@@ -96,6 +104,9 @@ pub fn use_keyboard_shortcuts() {
                 "Home" if press.no_modifiers() => playback_manager.skip_to_start(&score),
                 "End" if press.no_modifiers() => playback_manager.skip_to_end(&score),
                 "m" if press.no_modifiers() && !press.repeat => playback_manager.toggle_mute(),
+                "-" if press.cmd() => zoom.zoom_out(),
+                "=" | "+" if press.cmd() => zoom.zoom_in(),
+                "0" if press.cmd() => zoom.reset(),
                 _ => {}
             }
         }

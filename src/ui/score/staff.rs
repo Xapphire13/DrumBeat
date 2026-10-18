@@ -5,6 +5,7 @@ use dioxus::prelude::*;
 use crate::{
     data::{
         measure::{Fill, Measure as MeasureData},
+        position::Position,
         score::{Hairpin, HairpinKind},
     },
     ui::{
@@ -53,7 +54,11 @@ pub fn height(line_height: f32, has_hairpins: bool) -> f32 {
 
 #[component]
 pub fn Staff(dimensions: StaffDimensions, layout: StaffLayout) -> Element {
-    let StaffDimensions { width, height } = dimensions.clone();
+    let StaffDimensions {
+        width,
+        height,
+        zoom,
+    } = dimensions.clone();
     let StaffLayout {
         first_measure_number,
         measures,
@@ -74,6 +79,11 @@ pub fn Staff(dimensions: StaffDimensions, layout: StaffLayout) -> Element {
     let line_height = height / height_in_lines(!hairpins.is_empty());
     let baseline = HIGHEST_LINE * line_height;
     let scales = use_scales(&measures, &widths, left, baseline, line_height);
+    // The mouse is in window pixels, while the staff is laid out unzoomed
+    let mouse_position = mouse_position.map(|Position { x, y }| Position {
+        x: x / zoom,
+        y: y / zoom,
+    });
     let phantom_playhead_data = use_phantom_playhead_data(&mouse_position, &scales(), &measures);
     let mut container = use_signal(|| None::<Rc<MountedData>>);
     let span = measures
@@ -98,9 +108,13 @@ pub fn Staff(dimensions: StaffDimensions, layout: StaffLayout) -> Element {
             onmouseleave: handle_on_mouse_leave,
             onclick: handle_on_click,
             onmounted: move |event: MountedEvent| container.set(Some(event.data())),
-            style: "height: {height}px",
+            style: "height: {height * zoom}px",
 
-            svg { class: "staff", width: "{width}px", height: "{height}px",
+            svg {
+                class: "staff",
+                width: "{width * zoom}px",
+                height: "{height * zoom}px",
+                view_box: "0 0 {width} {height}",
                 for (measure , scale) in measures.iter().zip(scales()) {
                     if measure.fill != Fill::Full {
                         InvalidMeasure { scale, fill: measure.fill, repeat_end: measure.repeat_end }

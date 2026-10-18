@@ -3,7 +3,11 @@ use staff::Staff;
 
 use crate::{
     data::{measure::Measure, score::Hairpin},
-    ui::{hooks::use_size, playback_bar::PlaybackBar, providers::score_manager::use_score_manager},
+    ui::{
+        hooks::use_size,
+        playback_bar::PlaybackBar,
+        providers::{score_manager::use_score_manager, zoom::use_zoom},
+    },
 };
 
 mod beaming;
@@ -16,15 +20,22 @@ mod staff;
 
 /// Distance between staff lines
 const LINE_HEIGHT: f32 = 20.0;
+/// How large the score is drawn at 100% zoom, relative to the sizes it's laid
+/// out with
+const BASE_SCALE: f32 = 0.675;
 /// Space between the window edges and the staves' ends
 const STAFF_MARGIN: f32 = 16.0;
 /// Room at the start of each staff for its percussion clef, in line heights
 const CLEF_ROOM: f32 = 2.0;
 
+/// A staff's size in the units it's laid out in, which are pixels at 100%
+/// zoom
 #[derive(PartialEq, Clone)]
 pub struct StaffDimensions {
     width: f32,
     height: f32,
+    /// How much larger the staff is drawn than it's laid out
+    zoom: f32,
 }
 
 /// The measures on one staff, with the width each one is drawn at
@@ -46,14 +57,15 @@ pub struct StaffLayout {
 pub fn Score() -> Element {
     let (width, _, handle_on_resize) = use_size();
     let score = use_score_manager();
-    let width = width as f32;
-    let staves = use_memo(use_reactive((&width,), move |(width,)| {
+    let zoom = use_zoom();
+    let zoom = zoom.factor() * BASE_SCALE;
+    // The staves are laid out as if the window were `1 / zoom` times as wide,
+    // then drawn `zoom` times larger, so zooming reflows the measures to fit
+    // the window while everything in them, strokes included, scales as one
+    let width = width as f32 / zoom;
+    let staves = use_memo(use_reactive((&width, &zoom), move |(width, zoom)| {
         let score = score.read();
-        let mut staves = layout_staves(
-            &score.measures,
-            width - 2.0 * STAFF_MARGIN - CLEF_ROOM * LINE_HEIGHT,
-            LINE_HEIGHT,
-        );
+        let mut staves = layout_staves(&score.measures, width, STAFF_MARGIN / zoom);
         for staff in &mut staves {
             let (Some(first), Some(last)) = (staff.measures.first(), staff.measures.last()) else {
                 continue;
@@ -82,6 +94,7 @@ pub fn Score() -> Element {
                         dimensions: StaffDimensions {
                             width,
                             height: staff::height(LINE_HEIGHT, !layout.hairpins.is_empty()),
+                            zoom,
                         },
                         layout,
                     }
@@ -97,9 +110,12 @@ pub fn Score() -> Element {
 /// so a short last staff is left short instead
 const MAX_LAST_STAFF_STRETCH: f32 = 1.5;
 
-/// Break the measures into staves that fit `width`, giving each measure room
-/// for its notes, then stretch each staff's measures to fill it
-fn layout_staves(measures: &[Measure], width: f32, line_height: f32) -> Vec<StaffLayout> {
+/// Break the measures into staves that fit a window `window_width` wide, with
+/// `margin` at each side, giving each measure room for its notes, then stretch
+/// each staff's measures to fill it
+fn layout_staves(measures: &[Measure], window_width: f32, margin: f32) -> Vec<StaffLayout> {
+    let line_height = LINE_HEIGHT;
+    let width = window_width - 2.0 * margin - CLEF_ROOM * line_height;
     if width <= 0.0 {
         return vec![];
     }
@@ -109,8 +125,8 @@ fn layout_staves(measures: &[Measure], width: f32, line_height: f32) -> Vec<Staf
         first_measure_number,
         measures: vec![],
         widths: vec![],
-        start: STAFF_MARGIN,
-        left: STAFF_MARGIN + CLEF_ROOM * LINE_HEIGHT,
+        start: margin,
+        left: margin + CLEF_ROOM * line_height,
         hairpins: vec![],
     };
     let mut current = empty_staff(1);
