@@ -457,8 +457,12 @@ body {
     border-radius: 8px;
 }
 
-.volume-slider input {
+/* The thumb overflows the track, so the margin gives it room in the layout.
+   That centres what's drawn rather than just the track, and makes the slider
+   as tall as the MIDI readout that takes its place */
+.labelled-slider.volume-slider input {
     width: 110px;
+    margin: 5px 0;
 }
 
 /* Opens the drums output popover */
