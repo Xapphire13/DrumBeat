@@ -11,6 +11,8 @@ pub struct Hit {
     /// score's own tempo
     pub seconds: f64,
     pub sound: Sound,
+    /// The General MIDI note it's written as, for MIDI out
+    pub midi_note: u8,
     /// From 0 to 1
     pub velocity: f32,
 }
@@ -31,6 +33,7 @@ pub fn score_hits(score: &Score) -> Vec<Hit> {
                 hits.push(Hit {
                     seconds: tempo_map.ticks_to_seconds(to_performance(note.timestamp)),
                     sound: Sound::new(piece, note.articulation),
+                    midi_note: note.midi_note,
                     velocity: 1.0,
                 });
             }
@@ -45,6 +48,7 @@ pub fn score_hits(score: &Score) -> Vec<Hit> {
                 hits.push(Hit {
                     seconds: tempo_map.ticks_to_seconds(timestamp),
                     sound: Sound::new(piece, grace_note.articulation),
+                    midi_note: grace_note.midi_note,
                     velocity: GRACE_NOTE_VELOCITY,
                 });
             }

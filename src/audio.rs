@@ -2,10 +2,13 @@
 //! keeps its own clock on the performance timeline, so hits land on exact
 //! samples however the UI's frames are timed
 
-use std::sync::{
-    OnceLock,
-    atomic::{AtomicU32, AtomicU64, Ordering},
-    mpsc::{self, Receiver, Sender},
+use std::{
+    sync::{
+        OnceLock,
+        atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering},
+        mpsc::{self, Receiver, Sender},
+    },
+    time::{Duration, Instant},
 };
 
 use cpal::{
@@ -15,6 +18,7 @@ use cpal::{
 
 mod click;
 mod hits;
+pub mod midi;
 mod practice;
 mod voice;
 
@@ -52,6 +56,33 @@ static PRACTICE_BPM: AtomicU64 = AtomicU64::new(0);
 fn report_practice_bpm(tempo_id: u32, bpm: f64) {
     let bits = u64::from(tempo_id) << 32 | u64::from((bpm as f32).to_bits());
     PRACTICE_BPM.store(bits, Ordering::Relaxed);
+}
+
+/// Whether the score's drums go out as MIDI instead of to the built-in
+/// drums. The metronome stays built in either way
+static MIDI_OUT: AtomicBool = AtomicBool::new(false);
+
+/// Whether MIDI notes are held back, the way mute silences the built-in drums
+static MIDI_MUTED: AtomicBool = AtomicBool::new(false);
+
+/// How far ahead of the playhead MIDI notes are sent, in milliseconds, to
+/// make up for the delay of whatever plays them
+static SEND_EARLY_MS: AtomicU32 = AtomicU32::new(0);
+
+/// The most notes can be sent early by
+pub const MAX_SEND_EARLY_MS: u32 = 100;
+
+/// Send the score's drums out as MIDI, or play them on the built-in drums
+pub fn set_midi_out(enabled: bool) {
+    MIDI_OUT.store(enabled, Ordering::Relaxed);
+}
+
+pub fn set_midi_muted(muted: bool) {
+    MIDI_MUTED.store(muted, Ordering::Relaxed);
+}
+
+pub fn set_send_early_ms(ms: u32) {
+    SEND_EARLY_MS.store(ms.min(MAX_SEND_EARLY_MS), Ordering::Relaxed);
 }
 
 /// How far the volume moves towards a new setting each sample, so changing it
@@ -258,10 +289,16 @@ where
     let stream = device
         .build_output_stream(
             config,
-            move |data: &mut [T], _: &cpal::OutputCallbackInfo| {
+            move |data: &mut [T], info: &cpal::OutputCallbackInfo| {
                 while let Ok(command) = commands.try_recv() {
                     mixer.handle(command);
                 }
+                // When this buffer's first sample will be heard
+                let timestamp = info.timestamp();
+                let latency = timestamp
+                    .playback
+                    .saturating_duration_since(timestamp.callback);
+                mixer.start_buffer(Instant::now() + latency);
                 for bus in mixer.buses_mut() {
                     bus.load_volume();
                 }
@@ -374,6 +411,27 @@ struct Mixer {
     practice: Option<Practice>,
     /// Changes for every voice, so overlapping hits don't share their noise
     seed: u32,
+    midi: MidiCursor,
+    /// When the sample being worked out will be heard
+    buffer_start: Instant,
+    frames_into_buffer: u32,
+    /// The times of the hits sent as MIDI, round the loop included
+    #[cfg(test)]
+    midi_sent: Vec<f64>,
+}
+
+/// Where MIDI out has got to in the score's hits. It runs ahead of the
+/// playhead by the send-early time, so it has its own place in them
+struct MidiCursor {
+    enabled: bool,
+    muted: bool,
+    /// Seconds (at the score's tempo) notes are sent ahead of the playhead
+    send_early: f64,
+    /// Index into the hits of the next one to send
+    next_hit: usize,
+    /// Added to the hits' times once the cursor has gone round the loop
+    /// ahead of the playhead
+    lap_offset: f64,
 }
 
 impl Mixer {
@@ -395,6 +453,94 @@ impl Mixer {
             practice_bus: Bus::new(&PRACTICE_VOLUME),
             practice: None,
             seed: 1,
+            midi: MidiCursor {
+                enabled: false,
+                muted: false,
+                send_early: 0.0,
+                next_hit: 0,
+                lap_offset: 0.0,
+            },
+            buffer_start: Instant::now(),
+            frames_into_buffer: 0,
+            #[cfg(test)]
+            midi_sent: vec![],
+        }
+    }
+
+    /// Pick up MIDI out's settings for the buffer about to be worked out,
+    /// whose first sample will be heard at `start`
+    fn start_buffer(&mut self, start: Instant) {
+        self.buffer_start = start;
+        self.frames_into_buffer = 0;
+        let enabled = MIDI_OUT.load(Ordering::Relaxed);
+        if enabled && !self.midi.enabled {
+            // Switched over mid-play: carry on from the playhead
+            self.reset_midi_cursor(self.position);
+        }
+        if !enabled && self.midi.enabled {
+            midi::all_notes_off();
+        }
+        self.midi.enabled = enabled;
+        self.midi.muted = MIDI_MUTED.load(Ordering::Relaxed);
+        self.midi.send_early = f64::from(SEND_EARLY_MS.load(Ordering::Relaxed)) / 1000.0;
+    }
+
+    fn reset_midi_cursor(&mut self, seconds: f64) {
+        self.midi.next_hit = self.hits.partition_point(|hit| hit.seconds < seconds);
+        self.midi.lap_offset = 0.0;
+    }
+
+    /// When the sample being worked out will be heard
+    fn sample_time(&self) -> Instant {
+        self.buffer_start
+            + Duration::from_secs_f64(f64::from(self.frames_into_buffer) / self.sample_rate)
+    }
+
+    /// Send every hit that's due within the send-early time, timed to land
+    /// that far ahead of when it's heard on the built-in drums
+    fn schedule_midi(&mut self) {
+        if !self.midi.enabled || self.speed <= 0.0 {
+            return;
+        }
+        // While counting in, the score is that far off yet
+        let now = self.position + self.count_in.as_ref().map_or(0.0, |c| c.seconds);
+        let horizon = now + self.midi.send_early * self.speed;
+        loop {
+            if let Some(&hit) = self.hits.get(self.midi.next_hit)
+                && self.loop_seconds.is_none_or(|(_, end)| hit.seconds < end)
+            {
+                let due = hit.seconds + self.midi.lap_offset;
+                if due > horizon {
+                    return;
+                }
+                self.midi.next_hit += 1;
+                if !self.midi.muted {
+                    // Never later than now, so this is at most the
+                    // send-early time ahead of the sample
+                    let early = self.midi.send_early - (due - now) / self.speed;
+                    let at = self
+                        .sample_time()
+                        .checked_sub(Duration::from_secs_f64(early.max(0.0)))
+                        .unwrap_or_else(Instant::now);
+                    let velocity = (hit.velocity * 100.0).round() as u8;
+                    #[cfg(test)]
+                    self.midi_sent.push(due);
+                    #[cfg(not(test))]
+                    midi::schedule(at, hit.midi_note, velocity);
+                    #[cfg(test)]
+                    let _ = (at, velocity);
+                }
+                continue;
+            }
+            // Out of hits before the loop's end: go round it, if its end is
+            // within reach
+            match self.loop_seconds {
+                Some((start, end)) if end > start && end + self.midi.lap_offset <= horizon => {
+                    self.midi.lap_offset += end - start;
+                    self.midi.next_hit = self.hits.partition_point(|hit| hit.seconds < start);
+                }
+                _ => return,
+            }
         }
     }
 
@@ -427,7 +573,13 @@ impl Mixer {
                 }
             }
             Command::Seek(seconds) => self.seek(seconds),
-            Command::SetLoop(loop_seconds) => self.loop_seconds = loop_seconds,
+            Command::SetLoop(loop_seconds) => {
+                self.loop_seconds = loop_seconds;
+                if self.midi.enabled {
+                    midi::clear_pending();
+                    self.reset_midi_cursor(self.position);
+                }
+            }
             Command::SetSpeed(speed) => self.speed = speed,
             Command::SetClicks { clicks, sound } => {
                 self.clicks = clicks;
@@ -438,6 +590,9 @@ impl Mixer {
                 }
             }
             Command::Stop => {
+                if self.midi.enabled {
+                    midi::all_notes_off();
+                }
                 self.playing = false;
                 self.count_in = None;
                 click::publish(None);
@@ -462,6 +617,10 @@ impl Mixer {
 
     fn seek(&mut self, seconds: f64) {
         self.position = seconds;
+        if self.midi.enabled {
+            midi::clear_pending();
+        }
+        self.reset_midi_cursor(seconds);
         // A hit right on the new position is played
         self.next_hit = self.hits.partition_point(|hit| hit.seconds < seconds);
         self.next_click = self.clicks.partition_point(|click| click.seconds < seconds);
@@ -497,7 +656,11 @@ impl Mixer {
         if let Some((start, end)) = self.loop_seconds
             && self.position >= end
         {
-            self.position = wrap_into_loop(self.position, start, end);
+            let wrapped = wrap_into_loop(self.position, start, end);
+            // MIDI out is already round the loop, so it's that much less
+            // ahead now
+            self.midi.lap_offset -= self.position - wrapped;
+            self.position = wrapped;
             // The new position is a fraction of a sample past the start, so
             // a plain seek would skip the hits right on it, dropping the
             // loop's first note every time round
@@ -534,6 +697,7 @@ impl Mixer {
 
     fn next_sample(&mut self) -> f32 {
         if self.playing {
+            self.schedule_midi();
             if self.count_in.is_some() {
                 self.count_in();
             } else {
@@ -554,6 +718,7 @@ impl Mixer {
             self.trigger_practice(click);
         }
 
+        self.frames_into_buffer += 1;
         let mix = self.music.next_sample()
             + self.click_bus.next_sample()
             + self.practice_bus.next_sample();
@@ -569,6 +734,10 @@ impl Mixer {
     }
 
     fn trigger(&mut self, hit: Hit) {
+        // MIDI out sends the drums on its own clock
+        if self.midi.enabled {
+            return;
+        }
         if hit.sound.is_hihat() {
             // A new stroke on the hi-hat stops it ringing open
             for voice in &mut self.music.voices {
@@ -624,6 +793,7 @@ mod tests {
         Hit {
             seconds,
             sound: Sound::Snare,
+            midi_note: 38,
             velocity: 1.0,
         }
     }
@@ -657,6 +827,42 @@ mod tests {
         // The hit at the loop's end is never reached, and the one at its
         // start is played each time round
         assert_eq!(played, [0.25, 0.5, 0.25, 0.5, 0.25, 0.5]);
+    }
+
+    #[test]
+    fn midi_runs_ahead_round_the_loop() {
+        // 1000 samples a second, sending 100ms early
+        let mut mixer = Mixer::new(1000.0);
+        mixer.handle(Command::Play {
+            hits: vec![hit(0.0), hit(0.25), hit(0.5), hit(1.0)],
+            metronome: Metronome::default(),
+            from_seconds: 0.25,
+            speed: 1.0,
+            loop_seconds: Some((0.25, 1.0)),
+        });
+        mixer.midi.enabled = true;
+        mixer.midi.send_early = 0.1;
+        mixer.reset_midi_cursor(0.25);
+
+        let mut sent_at = vec![];
+        for _ in 0..1600 {
+            let before = mixer.midi_sent.len();
+            mixer.next_sample();
+            if mixer.midi_sent.len() > before {
+                sent_at.push(mixer.position);
+            }
+        }
+        // Each hit is sent 100ms before the playhead reaches it. The loop's
+        // first hit is sent while the playhead is still near the end, so it's
+        // due a lap on (at 1.0), and the hit at the loop's end is never sent
+        assert_eq!(mixer.midi_sent, [0.25, 0.5, 1.0, 0.5, 1.0]);
+        let expected = [0.25, 0.4, 0.9, 0.4, 0.9];
+        assert_eq!(sent_at.len(), expected.len());
+        for (sent, expected) in sent_at.iter().zip(expected) {
+            assert!((sent - expected).abs() < 0.002, "{sent_at:?}");
+        }
+        // The built-in drums stay quiet
+        assert!(mixer.music.voices.is_empty());
     }
 
     #[test]

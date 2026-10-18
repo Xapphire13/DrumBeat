@@ -8,3 +8,4 @@ mod playback_bar;
 mod practice_tool;
 mod providers;
 mod score;
+mod volume_control;

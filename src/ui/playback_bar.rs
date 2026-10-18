@@ -3,7 +3,7 @@ use std::cmp::Ordering;
 use dioxus::{html::input_data::MouseButton, prelude::*};
 use lucide_dioxus::{
     ChevronLeft, ChevronRight, ChevronUp, Gauge, Pause, Play, Repeat, RotateCcw, SkipBack,
-    SkipForward, Volume1, Volume2, VolumeX,
+    SkipForward,
 };
 
 use crate::{
@@ -13,6 +13,7 @@ use crate::{
         playback_manager::use_playback_manager,
         score_manager::use_score_manager,
     },
+    ui::volume_control::VolumeControl,
 };
 
 /// The range of the speed slider. Typing a BPM can go beyond it
@@ -134,31 +135,26 @@ pub fn PlaybackBar() -> Element {
         },
     );
 
-    let is_muted = playback_manager.is_muted();
-    // A muted slider reads as empty, and dragging it unmutes
-    let volume_percent = if is_muted {
-        0.0
-    } else {
-        (playback_manager.volume() * 100.0).round()
-    };
-    let handle_toggle_mute = move |_: MouseEvent| playback_manager.toggle_mute();
-    let handle_volume_input = move |event: FormEvent| {
-        if let Ok(percent) = event.value().parse::<f64>() {
-            playback_manager.set_volume(percent / 100.0);
-        }
-    };
-
     rsx! {
         div { class: "playback-bar",
             div { class: "timeline",
-            span { class: "timeline-time", title: "Time played", "{format_time(elapsed_seconds)}" }
-            div { class: "measure-strip", "aria-hidden": "true",
-                for group in segments {
-                    if let Some(class) = group.pass_class {
-                        span {
-                            class,
-                            style: "flex: {group.segments.len()} 1 0",
-                            for (offset , & class) in group.segments.iter().enumerate() {
+                span { class: "timeline-time", title: "Time played", "{format_time(elapsed_seconds)}" }
+                div { class: "measure-strip", "aria-hidden": "true",
+                    for group in segments {
+                        if let Some(class) = group.pass_class {
+                            span {
+                                class,
+                                style: "flex: {group.segments.len()} 1 0",
+                                for (offset, &class) in group.segments.iter().enumerate() {
+                                    StripSegment {
+                                        index: group.first_index + offset,
+                                        class,
+                                        band: loop_bands[group.first_index + offset],
+                                    }
+                                }
+                            }
+                        } else {
+                            for (offset, &class) in group.segments.iter().enumerate() {
                                 StripSegment {
                                     index: group.first_index + offset,
                                     class,
@@ -166,23 +162,14 @@ pub fn PlaybackBar() -> Element {
                                 }
                             }
                         }
-                    } else {
-                        for (offset , & class) in group.segments.iter().enumerate() {
-                            StripSegment {
-                                index: group.first_index + offset,
-                                class,
-                                band: loop_bands[group.first_index + offset],
-                            }
-                        }
                     }
                 }
-            }
-            button {
-                class: "timeline-time timeline-end",
-                title: end_time_title,
-                onclick: move |_| show_remaining.toggle(),
-                "{end_time}"
-            }
+                button {
+                    class: "timeline-time timeline-end",
+                    title: end_time_title,
+                    onclick: move |_| show_remaining.toggle(),
+                    "{end_time}"
+                }
             }
 
             div { class: "playback-controls",
@@ -191,8 +178,7 @@ pub fn PlaybackBar() -> Element {
                         div { class: "measure-counter",
                             span { class: "control-label count-in-label", "Count-in" }
                             div { class: "measure-count",
-                                span {
-                                    class: if click.beat == 0 { "measure-current count-in-beat first" } else { "measure-current count-in-beat" },
+                                span { class: if click.beat == 0 { "measure-current count-in-beat first" } else { "measure-current count-in-beat" },
                                     "{click.beat + 1}"
                                 }
                                 span { class: "measure-total", "/ {click.beats}" }
@@ -264,35 +250,7 @@ pub fn PlaybackBar() -> Element {
                 }
 
                 div { class: "playback-settings",
-                    div { class: "volume-control",
-                        button {
-                            class: "mute-button",
-                            title: if is_muted { "Unmute (M)" } else { "Mute (M)" },
-                            onclick: handle_toggle_mute,
-                            if volume_percent == 0.0 {
-                                VolumeX { size: 18 }
-                            } else if volume_percent < 50.0 {
-                                Volume1 { size: 18 }
-                            } else {
-                                Volume2 { size: 18 }
-                            }
-                        }
-                        label { class: "labelled-slider volume-slider",
-                            span { class: "slider-labels",
-                                span { class: "control-label", "Volume" }
-                                span { "{volume_percent}%" }
-                            }
-                            input {
-                                r#type: "range",
-                                style: "--fill: {volume_percent}%",
-                                min: 0,
-                                max: 100,
-                                step: 1,
-                                value: volume_percent,
-                                oninput: handle_volume_input,
-                            }
-                        }
-                    }
+                    VolumeControl {}
 
                     div { class: "tempo-control",
                         button {
@@ -390,11 +348,12 @@ fn StripSegment(index: usize, class: &'static str, band: Option<LoopBand>) -> El
             class: "measure-slot",
             onmousedown: move |event: MouseEvent| {
                 if event.trigger_button() == Some(MouseButton::Primary) {
-                    loop_editor.start_drag(LoopDrag::Measures {
-                        anchor: index,
-                        current: index,
-                        moved: false,
-                    });
+                    loop_editor
+                        .start_drag(LoopDrag::Measures {
+                            anchor: index,
+                            current: index,
+                            moved: false,
+                        });
                 }
             },
             onmouseenter: move |_| loop_editor.drag_to_measure(index),

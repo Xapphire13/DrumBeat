@@ -3,8 +3,9 @@ use std::time::{Duration, Instant};
 use dioxus::{core::Task, prelude::*};
 
 use crate::{
-    audio::{self, ClickPosition, MetronomeSettings, wrap_into_loop},
+    audio::{self, ClickPosition, MetronomeSettings, midi, wrap_into_loop},
     data::{loop_range::LoopRange, score::Score},
+    settings::{self, AudioSettings, DrumsOutput},
 };
 
 /// How often the playhead moves while playing
@@ -23,9 +24,8 @@ pub struct PlaybackState {
     performance_timestamp: u32,
     /// Multiplies the score's tempo, e.g. 0.5 plays at half speed
     speed: f64,
-    /// From 0 to 1
-    volume: f64,
-    muted: bool,
+    /// Volume, mute and where the drums are played, kept between launches
+    audio: AudioSettings,
     /// The section being practised, which plays over and over. The playhead
     /// is kept inside it
     loop_range: Option<LoopRange>,
@@ -72,8 +72,12 @@ pub fn use_playback_manager_provider() {
             playhead_timestamp: 0,
             performance_timestamp: 0,
             speed: 1.0,
-            volume: 1.0,
-            muted: false,
+            audio: {
+                let audio = settings::load().audio;
+                apply_audio(&audio);
+                connect_midi(&audio);
+                audio
+            },
             loop_range: None,
             seeks: 0,
             last_seek_on_score: false,
@@ -195,27 +199,65 @@ impl PlaybackManager {
     }
 
     pub fn volume(&self) -> f64 {
-        (self.state)().volume
+        (self.state)().audio.volume
     }
 
     pub fn is_muted(&self) -> bool {
-        (self.state)().muted
+        (self.state)().audio.muted
     }
 
     /// Set the volume, from 0 to 1. Turning it up unmutes
     pub fn set_volume(&mut self, volume: f64) {
-        let mut state = self.state.write();
-        state.volume = volume.clamp(0.0, 1.0);
-        if state.volume > 0.0 {
-            state.muted = false;
-        }
-        apply_volume(&state);
+        self.update_audio(|audio| {
+            audio.volume = volume.clamp(0.0, 1.0);
+            if audio.volume > 0.0 {
+                audio.muted = false;
+            }
+        });
     }
 
     pub fn toggle_mute(&mut self) {
+        self.update_audio(|audio| audio.muted = !audio.muted);
+    }
+
+    pub fn drums_output(&self) -> DrumsOutput {
+        (self.state)().audio.output
+    }
+
+    pub fn set_drums_output(&mut self, output: DrumsOutput) {
+        self.update_audio(|audio| audio.output = output);
+        connect_midi(&self.state.peek().audio);
+    }
+
+    pub fn midi_port(&self) -> String {
+        (self.state)().audio.midi_port
+    }
+
+    pub fn set_midi_port(&mut self, port: String) {
+        self.update_audio(|audio| audio.midi_port = port);
+        connect_midi(&self.state.peek().audio);
+    }
+
+    /// Try the picked port again, e.g. once a device is plugged back in
+    pub fn reconnect_midi(&self) {
+        connect_midi(&self.state.peek().audio);
+    }
+
+    pub fn midi_offset_ms(&self) -> u32 {
+        (self.state)().audio.midi_offset_ms
+    }
+
+    pub fn set_midi_offset_ms(&mut self, ms: u32) {
+        self.update_audio(|audio| audio.midi_offset_ms = ms.min(audio::MAX_SEND_EARLY_MS));
+    }
+
+    /// Change the audio settings, passing them on to the audio and MIDI
+    /// threads and saving them
+    fn update_audio(&mut self, change: impl FnOnce(&mut AudioSettings)) {
         let mut state = self.state.write();
-        state.muted = !state.muted;
-        apply_volume(&state);
+        change(&mut state.audio);
+        apply_audio(&state.audio);
+        settings::save_audio(&state.audio);
     }
 
     pub fn metronome(&self) -> MetronomeSettings {
@@ -425,9 +467,19 @@ fn loop_seconds(range: LoopRange, score: &Score) -> (f64, f64) {
     )
 }
 
-fn apply_volume(state: &PlaybackState) {
-    let volume = if state.muted { 0.0 } else { state.volume };
+fn apply_audio(audio: &AudioSettings) {
+    let volume = if audio.muted { 0.0 } else { audio.volume };
     audio::set_volume(volume as f32);
+    audio::set_midi_out(audio.output == DrumsOutput::Midi);
+    audio::set_midi_muted(audio.muted);
+    audio::set_send_early_ms(audio.midi_offset_ms);
+}
+
+/// Open the MIDI port when the drums go out as MIDI, and close it when they
+/// don't. Kept apart from `apply_audio`, since reopening a port isn't free
+fn connect_midi(audio: &AudioSettings) {
+    let port = (audio.output == DrumsOutput::Midi).then(|| audio.midi_port.clone());
+    midi::connect(port);
 }
 
 pub fn use_playback_manager() -> PlaybackManager {

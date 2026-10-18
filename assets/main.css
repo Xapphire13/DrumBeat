@@ -445,6 +445,7 @@ body {
 }
 
 .volume-control {
+    position: relative;
     display: flex;
     align-items: center;
     gap: 8px;
@@ -458,6 +459,232 @@ body {
 
 .volume-slider input {
     width: 110px;
+}
+
+/* Opens the drums output popover */
+.playback-bar .output-menu {
+    width: 22px;
+    height: 28px;
+    margin-left: -4px;
+    border-radius: 6px;
+    color: var(--muted);
+}
+
+.playback-bar .output-menu.open {
+    color: var(--accent-text);
+    background: #1d2029;
+}
+
+/* With MIDI out, the volume slider's place shows where notes are going */
+.midi-target {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    width: 110px;
+}
+
+.midi-target-value {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 16px;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: #f4f5f7;
+    white-space: nowrap;
+}
+
+.midi-target-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.midi-target-value.muted {
+    color: var(--muted);
+}
+
+.midi-target-value.problem {
+    color: #ff8a8a;
+}
+
+/* Flashes as each note is sent */
+.activity-dot {
+    flex-shrink: 0;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #4a4f5e;
+    transition: background-color 80ms ease, box-shadow 80ms ease;
+}
+
+.activity-dot.lit {
+    background: var(--accent);
+    box-shadow: 0 0 6px var(--accent);
+}
+
+.activity-dot.problem {
+    background: #d62828;
+}
+
+.output-popover {
+    position: absolute;
+    right: -8px;
+    bottom: calc(100% + 18px);
+    z-index: 2;
+    width: 320px;
+    box-sizing: border-box;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    border-radius: 12px;
+    background: var(--surface);
+    border: 1px solid #343846;
+    box-shadow: 0 12px 32px rgba(15, 17, 22, 0.35);
+    color: #f4f5f7;
+    cursor: default;
+}
+
+.field-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.playback-bar .small-button {
+    gap: 4px;
+    height: 22px;
+    padding: 0 6px;
+    border-radius: 6px;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.port-list {
+    display: flex;
+    flex-direction: column;
+    max-height: 168px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: #0f1116;
+}
+
+.playback-bar .port {
+    flex-shrink: 0;
+    justify-content: flex-start;
+    gap: 8px;
+    height: 32px;
+    padding: 0 10px;
+    font-size: 12px;
+    text-align: left;
+}
+
+.port + .port {
+    border-top: 1px solid var(--border);
+}
+
+.playback-bar .port.selected {
+    background: #262a35;
+    color: #f4f5f7;
+}
+
+.port .radio {
+    flex-shrink: 0;
+    width: 12px;
+    height: 12px;
+    box-sizing: border-box;
+    border-radius: 50%;
+    border: 1.5px solid #4a4f5e;
+}
+
+.port.selected .radio {
+    border: 4px solid var(--accent);
+}
+
+.port-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.port .tag {
+    margin-left: auto;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+}
+
+.port .tag.problem {
+    color: #ff8a8a;
+}
+
+.popover-divider {
+    height: 1px;
+    margin: 0 -14px;
+    background: var(--border);
+}
+
+.status-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.status {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #c9ccd6;
+}
+
+.status-dot {
+    flex-shrink: 0;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #4a4f5e;
+}
+
+.status-dot.ok {
+    background: #3ecf8e;
+}
+
+.status-dot.problem {
+    background: #d62828;
+}
+
+.playback-bar .test-button {
+    flex-shrink: 0;
+    gap: 6px;
+    height: 28px;
+    padding: 0 10px;
+    border-radius: 8px;
+    border: 1px solid #343846;
+    color: #f4f5f7;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+.playback-bar .test-button:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.output-popover .hint {
+    margin: 0;
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--muted);
+}
+
+.output-popover .hint b {
+    font-weight: 600;
+    color: #c9ccd6;
 }
 
 /* Tempo is a chip, with its controls in a popover above it */

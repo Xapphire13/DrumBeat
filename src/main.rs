@@ -6,6 +6,7 @@ mod data;
 // The loader reads more of the file than the app uses yet
 #[allow(dead_code)]
 mod gp;
+mod settings;
 mod ui;
 
 fn main() {
