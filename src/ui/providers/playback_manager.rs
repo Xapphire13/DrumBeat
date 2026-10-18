@@ -70,11 +70,7 @@ impl PlaybackManager {
             return;
         };
 
-        if performance
-            .note_timestamps(&score.measures)
-            .last()
-            .is_none_or(|&last_timestamp| timestamp > last_timestamp)
-        {
+        if timestamp >= performance.end_timestamp() {
             return;
         }
 

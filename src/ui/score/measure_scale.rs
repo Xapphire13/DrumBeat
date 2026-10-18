@@ -152,6 +152,26 @@ impl MeasureScale {
             )
     }
 
+    /// Where the playhead is drawn at a timestamp. Like `get_x`, but the
+    /// measure's end is drawn at `end_x`, so the playhead glides across the
+    /// bar line to where the next measure starts instead of jumping there
+    pub fn get_playhead_x(&self, timestamp: u32, end_x: f32) -> f32 {
+        let (Some(&(end_timestamp, _)), Some(last_onset)) = (
+            self.anchors.last(),
+            self.anchors.len().checked_sub(2).map(|i| self.anchors[i]),
+        ) else {
+            return self.get_x(timestamp);
+        };
+        let (onset_timestamp, onset_x) = last_onset;
+        if timestamp <= onset_timestamp {
+            return self.get_x(timestamp);
+        }
+
+        let progress = (timestamp.min(end_timestamp) - onset_timestamp) as f32
+            / (end_timestamp - onset_timestamp) as f32;
+        onset_x + (end_x - onset_x) * progress
+    }
+
     /// The inverse of `get_x`: the timestamp drawn at `x`
     pub fn get_timestamp(&self, x: f32) -> u32 {
         let Some(&(first_timestamp, first_x)) = self.anchors.first() else {
@@ -316,6 +336,21 @@ mod tests {
         // Equal gaps get equal space, and positions round trip
         assert!(((second - first) - (third - second)).abs() < 1e-3);
         assert_eq!(scale.get_timestamp(third), 3840 + 480);
+    }
+
+    #[test]
+    fn playhead_glides_to_the_next_measure() {
+        let measure = measure(0, &[0, 1920]);
+        let scale = MeasureScale::new((100.0, 400.0), 0.0, 15.0, &measure);
+        let next_start = 420.0;
+
+        // Up to the last onset it follows the notes
+        assert!((scale.get_playhead_x(960, next_start) - scale.get_x(960)).abs() < 1e-3);
+        assert!((scale.get_playhead_x(1920, next_start) - scale.get_x(1920)).abs() < 1e-3);
+        // Then heads for the next measure's start, reaching it as the measure ends
+        let halfway = scale.get_playhead_x(2880, next_start);
+        assert!((halfway - (scale.get_x(1920) + next_start) / 2.0).abs() < 1e-3);
+        assert!((scale.get_playhead_x(3840, next_start) - next_start).abs() < 1e-3);
     }
 
     #[test]

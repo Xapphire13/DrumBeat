@@ -20,17 +20,20 @@ pub fn Playhead(
     let is_playing = playback_manager.is_playing();
     let playhead_x_pos = {
         let scales = scales();
-        let measure_scale = scales.iter().enumerate().find_map(|(i, scale)| {
-            measures.get(i).and_then(|measure| {
-                if measure.contains_timestamp(playhead_timestamp) {
-                    Some(scale)
-                } else {
-                    None
-                }
+        let measures = measures();
+        measures
+            .iter()
+            .position(|measure| measure.contains_timestamp(playhead_timestamp))
+            .and_then(|i| {
+                let scale = scales.get(i)?;
+                // Glide to where the next measure starts, or to the closing
+                // bar line at the end of the staff
+                let end_x = match (measures.get(i + 1), scales.get(i + 1)) {
+                    (Some(next), Some(next_scale)) => next_scale.get_x(next.timestamp),
+                    _ => scale.outer_x_bounds.1,
+                };
+                Some(scale.get_playhead_x(playhead_timestamp, end_x))
             })
-        });
-
-        measure_scale.map(|measure_scale| measure_scale.get_x(playhead_timestamp))
     };
 
     rsx! {

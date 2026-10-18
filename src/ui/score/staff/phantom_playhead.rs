@@ -50,15 +50,18 @@ pub fn use_phantom_playhead_data(
         (mouse_position, scales, measures),
         |(mouse_position, scales, measures)| {
             if let Some(Position { x, .. }) = mouse_position {
-                // Collect all note timestamps from this staff
-                let mut note_timestamps = vec![];
+                // Snap to every note on this staff, and to the start of each
+                // measure so empty measures and ones opening with a rest can
+                // be clicked too
+                let mut snap_timestamps = vec![];
                 for measure in &measures {
+                    snap_timestamps.push(measure.timestamp);
                     for note in &measure.notes {
-                        note_timestamps.push(note.timestamp);
+                        snap_timestamps.push(note.timestamp);
                     }
                 }
 
-                if note_timestamps.is_empty() {
+                if snap_timestamps.is_empty() {
                     return None;
                 }
 
@@ -77,8 +80,8 @@ pub fn use_phantom_playhead_data(
                     })
                     .map_or(0, |scale| scale.get_timestamp(x));
 
-                // Find closest actual note timestamp
-                if let Some(&closest_timestamp) = note_timestamps
+                // Find the closest snap point
+                if let Some(&closest_timestamp) = snap_timestamps
                     .iter()
                     .min_by_key(|&&ts| (i64::from(ts) - i64::from(mouse_timestamp)).abs())
                 {
