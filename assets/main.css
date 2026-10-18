@@ -400,12 +400,24 @@ body {
     display: none;
 }
 
+/* The pass and loop chips sit side by side, or stacked when short of room */
+.position-chips {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+.position-chips:empty {
+    display: none;
+}
+
 .loop-chip {
     display: flex;
     align-items: center;
     gap: 6px;
     height: 28px;
-    padding: 0 3px 0 10px;
+    padding: 0 3px 0 9px;
     border-radius: 999px;
     background: var(--accent);
     color: #ffffff;
@@ -414,9 +426,8 @@ body {
     white-space: nowrap;
 }
 
-.loop-chip-length {
-    font-weight: 500;
-    color: rgba(255, 255, 255, 0.72);
+.loop-chip-range {
+    font-family: var(--mono);
 }
 
 .playback-bar .loop-clear {
@@ -432,9 +443,18 @@ body {
     background: rgba(15, 17, 22, 0.4);
 }
 
-/* Short of room, the pass chip drops its words */
+@container (max-width: 1059.9px) {
+    .position-chips {
+        flex-direction: column;
+        gap: 4px;
+    }
+}
+
+/* Short of room, the pass chip drops its words and the loop chip its range,
+   which stays in its tooltip */
 @container (max-width: 903.9px) {
-    .repeat-pass-long {
+    .repeat-pass-long,
+    .loop-chip-range {
         display: none;
     }
 

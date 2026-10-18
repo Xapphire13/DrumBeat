@@ -39,9 +39,11 @@ pub fn PlaybackBar() -> Element {
     let loop_chip = shown_loop.map(|range| {
         let score = score.read();
         let label = |timestamp| count_label(timestamp, &score.performance, &score.measures);
+        let (start, end) = (label(range.start), label(range.end));
+        let length = format_beats(range.beats(&score.performance, &score.measures));
         (
-            format!("Loop {} – {}", label(range.start), label(range.end)),
-            format_beats(range.beats(&score.performance, &score.measures)),
+            format!("{start}–{end}"),
+            format!("Looping {start} up to {end}, {length}"),
         )
     });
     // Measures are counted as they're played, with repeats expanded
@@ -200,26 +202,30 @@ pub fn PlaybackBar() -> Element {
                             span { class: "measure-total", "/ {number_of_measures}" }
                         }
                     }
-                    if passes > 1 {
-                        span {
-                            class: "repeat-pass",
-                            title: "Time through the repeat",
-                            Repeat { size: 13 }
-                            span { class: "repeat-pass-long", "Pass {pass} of {passes}" }
-                            span { class: "repeat-pass-short", "{pass}/{passes}" }
+                    div { class: "position-chips",
+                        if passes > 1 {
+                            span {
+                                class: "repeat-pass",
+                                title: "Time through the repeat",
+                                Repeat { size: 13 }
+                                span { class: "repeat-pass-long", "Pass {pass} of {passes}" }
+                                span { class: "repeat-pass-short", "{pass}/{passes}" }
+                            }
                         }
-                    }
-                    if let Some((label, length)) = loop_chip {
-                        span { class: "loop-chip",
-                            Infinity { size: 15 }
-                            "{label}"
-                            span { class: "loop-chip-length", "{length}" }
-                            button {
-                                class: "loop-clear",
-                                title: "Stop looping (Esc)",
-                                aria_label: "Stop looping",
-                                onclick: move |_| playback_manager.clear_loop(),
-                                X { size: 12 }
+                        if let Some((range, description)) = loop_chip {
+                            span {
+                                class: "loop-chip",
+                                title: "{description}",
+                                aria_label: "{description}",
+                                Infinity { size: 15 }
+                                span { class: "loop-chip-range", "{range}" }
+                                button {
+                                    class: "loop-clear",
+                                    title: "Stop looping (Esc)",
+                                    aria_label: "Stop looping",
+                                    onclick: move |_| playback_manager.clear_loop(),
+                                    X { size: 12 }
+                                }
                             }
                         }
                     }
