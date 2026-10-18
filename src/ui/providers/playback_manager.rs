@@ -199,6 +199,17 @@ impl PlaybackManager {
         }
     }
 
+    pub fn skip_to_start(&mut self, score: &Score) {
+        self.seek(0, score);
+    }
+
+    /// Move the playhead to the start of the last measure played
+    pub fn skip_to_end(&mut self, score: &Score) {
+        if let Some(last) = score.performance.measures().last() {
+            self.seek(last.timestamp, score);
+        }
+    }
+
     pub fn skip_to_next_note(&mut self, score: &Score) {
         let playhead = self.state.peek().performance_timestamp;
         if let Some(next_timestamp) = score

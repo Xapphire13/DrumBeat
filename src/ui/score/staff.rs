@@ -1,3 +1,5 @@
+use std::{cell::Cell, rc::Rc};
+
 use dioxus::prelude::*;
 
 use crate::{
@@ -73,6 +75,12 @@ pub fn Staff(dimensions: StaffDimensions, layout: StaffLayout) -> Element {
     let baseline = HIGHEST_LINE * line_height;
     let scales = use_scales(&measures, &widths, left, baseline, line_height);
     let phantom_playhead_data = use_phantom_playhead_data(&mouse_position, &scales(), &measures);
+    let mut container = use_signal(|| None::<Rc<MountedData>>);
+    let span = measures
+        .first()
+        .zip(measures.last())
+        .map(|(first, last)| (first.timestamp, last.end_timestamp()));
+    use_follow_playhead(container, span);
 
     let handle_on_click = {
         let phantom_playhead_data = phantom_playhead_data.clone();
@@ -89,6 +97,7 @@ pub fn Staff(dimensions: StaffDimensions, layout: StaffLayout) -> Element {
             onmousemove: handle_on_mouse_move,
             onmouseleave: handle_on_mouse_leave,
             onclick: handle_on_click,
+            onmounted: move |event: MountedEvent| container.set(Some(event.data())),
             style: "height: {height}px",
 
             svg { class: "staff", width: "{width}px", height: "{height}px",
@@ -193,6 +202,45 @@ pub fn Staff(dimensions: StaffDimensions, layout: StaffLayout) -> Element {
             }
         }
     }
+}
+
+/// Scroll the staff into view when the playhead moves onto it. While
+/// playing it's brought to the top, so the staves after it can be read
+/// ahead; otherwise, e.g. when stepping through notes, it's only scrolled
+/// far enough to be seen. Playing from a staff that's out of view brings it
+/// back too
+fn use_follow_playhead(container: Signal<Option<Rc<MountedData>>>, span: Option<(u32, u32)>) {
+    let playback_manager = use_playback_manager();
+    // Only changes when the playhead enters or leaves the staff, or playback
+    // starts or stops, not on every frame
+    let state = use_memo(use_reactive!(|span| {
+        let timestamp = playback_manager.playhead_timestamp();
+        let here = span.is_some_and(|(start, end)| (start..end).contains(&timestamp));
+        (here, playback_manager.is_playing())
+    }));
+    let previous = use_hook(|| Rc::new(Cell::new((false, false))));
+
+    use_effect(move || {
+        let (here, playing) = state();
+        let (was_here, was_playing) = previous.replace((here, playing));
+        let vertical = match (here, playing) {
+            (true, true) if !was_here => ScrollLogicalPosition::Start,
+            (true, _) if !was_here || !was_playing => ScrollLogicalPosition::Nearest,
+            _ => return,
+        };
+        let Some(container) = container.peek().clone() else {
+            return;
+        };
+        spawn(async move {
+            let _ = container
+                .scroll_to_with_options(ScrollToOptions {
+                    behavior: ScrollBehavior::Smooth,
+                    vertical,
+                    horizontal: ScrollLogicalPosition::Nearest,
+                })
+                .await;
+        });
+    });
 }
 
 /// A highlight behind a measure whose beats don't add up to its time

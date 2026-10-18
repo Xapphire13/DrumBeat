@@ -4,6 +4,7 @@ use dioxus::prelude::*;
 use lucide_dioxus::FolderOpen;
 
 use crate::ui::{
+    keyboard_shortcuts::use_keyboard_shortcuts,
     providers::{
         playback_manager::{use_playback_manager, use_playback_manager_provider},
         score_manager::{load_score, use_score_manager, use_score_manager_provider},
@@ -18,6 +19,7 @@ const MAIN_CSS: Asset = asset!("/assets/main.css");
 pub fn App() -> Element {
     use_playback_manager_provider();
     use_score_manager_provider();
+    use_keyboard_shortcuts();
 
     rsx! {
         document::Link { rel: "icon", href: FAVICON }

@@ -17,7 +17,6 @@ pub fn Playhead(
     let StaffDimensions { height, .. } = staff_dimensions;
     let playback_manager = use_playback_manager();
     let playhead_timestamp = playback_manager.playhead_timestamp();
-    let is_playing = playback_manager.is_playing();
     let playhead_x_pos = {
         let scales = scales();
         let measures = measures();
@@ -41,14 +40,6 @@ pub fn Playhead(
             line {
                 stroke: "#8F00FF",
                 stroke_width: 1.5,
-                // The playhead is redrawn when it moves to another staff, so
-                // keep that staff in view while playing
-                onmounted: move |event: MountedEvent| async move {
-                    if is_playing {
-                        let _ = event.scroll_to(ScrollBehavior::Smooth).await;
-                    }
-                },
-
                 x1: "{x}",
                 y1: "0",
                 x2: "{x}",
