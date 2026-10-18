@@ -2,7 +2,7 @@
 
 use crate::data::{
     drum_piece::DrumPiece,
-    measure::Measure,
+    measure::{Fill, Measure},
     note::{
         Annotation, Articulation, Duration, GRACE_NOTE_LEAD, GraceNote, Note, NoteValue, Rest,
         TICKS_PER_QUARTER, Tuplet as DataTuplet,
@@ -13,7 +13,8 @@ use crate::data::{
 };
 
 use super::{
-    Fraction, GpBeat, GpError, GpNoteValue, GpRhythm, GpScore, GpVoice, Hairpin, TimeSignature,
+    Fraction, GpBar, GpBeat, GpError, GpNoteValue, GpRhythm, GpScore, GpVoice, Hairpin,
+    TimeSignature,
 };
 
 const TICKS_PER_WHOLE: u32 = 4 * TICKS_PER_QUARTER;
@@ -65,6 +66,7 @@ impl GpScore {
                 time_signature: convert_time_signature(&bar.time_signature)?,
                 repeat_start: bar.repeat_start,
                 repeat_end: bar.repeat_end,
+                fill: bar_fill(bar),
             };
             bar_timestamp += measure.get_length();
             measures.push(measure);
@@ -210,6 +212,28 @@ fn annotate_hihats(measures: &mut [Measure]) {
     }
 }
 
+/// Compare each voice's beats with the time signature. A bar with no beats
+/// at all hasn't been written yet, so it counts as short
+fn bar_fill(bar: &GpBar) -> Fill {
+    let written = bar.time_signature.bar_length();
+    let ends: Vec<Fraction> = bar
+        .voices
+        .iter()
+        .filter_map(|voice| {
+            let last = voice.beats.iter().rfind(|beat| beat.grace.is_none())?;
+            Some(last.start + last.rhythm.duration())
+        })
+        .collect();
+    match ends.iter().max() {
+        None => Fill::Short,
+        Some(&longest) if longest > written => Fill::Over {
+            length: to_ticks(longest),
+        },
+        Some(_) if ends.iter().any(|&end| end < written) => Fill::Short,
+        Some(_) => Fill::Full,
+    }
+}
+
 /// Convert an offset in whole notes to ticks, rounding when it doesn't land
 /// on a whole tick
 fn to_ticks(fraction: Fraction) -> u32 {
@@ -300,6 +324,7 @@ mod tests {
             },
             repeat_start: false,
             repeat_end: None,
+            fill: Fill::Full,
         }];
         annotate_hihats(&mut measures);
 
@@ -351,6 +376,48 @@ mod tests {
         assert_eq!(
             timestamps,
             vec![960 - GRACE_NOTE_LEAD, 2040 - 80, 2040 - 40]
+        );
+    }
+
+    #[test]
+    fn flags_bars_whose_beats_dont_fill_the_time_signature() {
+        let quarters = |count: u32| GpVoice {
+            beats: (0..count)
+                .map(|i| GpBeat {
+                    start: Fraction::new(i, 4),
+                    rhythm: GpRhythm {
+                        value: GpNoteValue::Quarter,
+                        dots: 0,
+                        tuplet: None,
+                        inner_tuplet: None,
+                    },
+                    grace: None,
+                    hairpin: None,
+                    notes: vec![],
+                })
+                .collect(),
+        };
+        let bar = |voices| GpBar {
+            time_signature: TimeSignature {
+                notes_per_measure: 4,
+                note_value: 4,
+            },
+            section: None,
+            repeat_start: false,
+            repeat_end: None,
+            voices,
+        };
+
+        assert_eq!(bar_fill(&bar(vec![quarters(4)])), Fill::Full);
+        assert_eq!(bar_fill(&bar(vec![quarters(1)])), Fill::Short);
+        // One voice is enough to make the bar short
+        assert_eq!(bar_fill(&bar(vec![quarters(4), quarters(3)])), Fill::Short);
+        assert_eq!(bar_fill(&bar(vec![])), Fill::Short);
+        assert_eq!(
+            bar_fill(&bar(vec![quarters(5)])),
+            Fill::Over {
+                length: 5 * TICKS_PER_QUARTER
+            }
         );
     }
 }

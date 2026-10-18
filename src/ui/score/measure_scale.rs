@@ -259,6 +259,7 @@ fn gap_width(gap: u32, unit: f32) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::data::measure::Fill;
     use crate::data::{
         note::{Articulation, Duration, Note, NoteValue},
         time_signature::TimeSignature,
@@ -287,6 +288,7 @@ mod tests {
             rests: vec![],
             grace_notes: vec![],
             repeat_end: None,
+            fill: Fill::Full,
         }
     }
 

@@ -508,6 +508,7 @@ fn beat_ticks(measure: &Measure) -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::data::measure::Fill;
     use crate::data::{
         note::{Articulation, Duration, Note},
         time_signature::TimeSignature,
@@ -541,6 +542,7 @@ mod tests {
             rests: vec![],
             grace_notes: vec![],
             repeat_end: None,
+            fill: Fill::Full,
         }
     }
 

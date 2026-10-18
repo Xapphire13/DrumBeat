@@ -122,6 +122,16 @@ body {
     font-weight: 600;
 }
 
+.staff .invalid-measure {
+    fill: rgba(255, 80, 80, 0.16);
+    stroke: none;
+}
+
+.staff .invalid-measure-label {
+    fill: #d62828;
+    font-weight: 600;
+}
+
 .bpm-input {
     width: 52px;
     margin-left: 4px;

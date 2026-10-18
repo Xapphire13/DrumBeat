@@ -3,7 +3,7 @@ use super::*;
 /// A guitar track, then a drum track with two bars:
 /// - bar 0 (7/8, repeat start, "Intro"): voice 0 is a snare triplet ending
 ///   in a rim shot, a dotted-quarter kick tied into the next bar, and a grace
-///   hi-hat before a quarter rest; voice 1 is a single crash
+///   hi-hat before a quarter rest; voice 1 is a single crash held for the bar
 /// - bar 1 (4/4, repeat end x3): the tied kick as a whole note
 const GPIF: &str = r#"<?xml version="1.0" encoding="utf-8"?>
 <GPIF>
@@ -76,7 +76,7 @@ Intro
 <Beat id="2"><Rhythm ref="1" /><Notes>2</Notes></Beat>
 <Beat id="3"><GraceNotes>BeforeBeat</GraceNotes><Rhythm ref="3" /><Notes>4</Notes></Beat>
 <Beat id="4"><Rhythm ref="5" /></Beat>
-<Beat id="5"><Rhythm ref="4" /><Notes>5</Notes></Beat>
+<Beat id="5"><Rhythm ref="6" /><Notes>5</Notes></Beat>
 <Beat id="6"><Rhythm ref="4" /><Notes>3</Notes></Beat>
 </Beats>
 <Notes>
@@ -93,6 +93,7 @@ Intro
 <Rhythm id="3"><NoteValue>32nd</NoteValue></Rhythm>
 <Rhythm id="4"><NoteValue>Whole</NoteValue></Rhythm>
 <Rhythm id="5"><NoteValue>Quarter</NoteValue></Rhythm>
+<Rhythm id="6"><NoteValue>Half</NoteValue><AugmentationDot count="2" /></Rhythm>
 </Rhythms>
 </GPIF>"#;
 

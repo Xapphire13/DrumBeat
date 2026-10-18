@@ -198,6 +198,7 @@ fn play_order(measures: &[Measure]) -> Vec<usize> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::data::measure::Fill;
     use crate::data::{note::NoteValue, time_signature::TimeSignature};
 
     /// 4/4 measures, `(repeat_start, repeat_end)` for each
@@ -216,6 +217,7 @@ mod tests {
                 rests: vec![],
                 grace_notes: vec![],
                 repeat_end,
+                fill: Fill::Full,
             })
             .collect()
     }

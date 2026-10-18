@@ -16,6 +16,10 @@ mod staff;
 
 /// Distance between staff lines
 const LINE_HEIGHT: f32 = 20.0;
+/// Space between the window edges and the staves' ends
+const STAFF_MARGIN: f32 = 16.0;
+/// Room at the start of each staff for its percussion clef, in line heights
+const CLEF_ROOM: f32 = 2.0;
 
 #[derive(PartialEq, Clone)]
 pub struct StaffDimensions {
@@ -30,6 +34,10 @@ pub struct StaffLayout {
     first_measure_number: usize,
     measures: Vec<Measure>,
     widths: Vec<f32>,
+    /// Where the staff starts, leaving a margin before it
+    start: f32,
+    /// Where the first measure starts, after the clef
+    left: f32,
     /// The hairpins that reach into this staff
     hairpins: Vec<Hairpin>,
 }
@@ -41,7 +49,11 @@ pub fn Score() -> Element {
     let width = width as f32;
     let staves = use_memo(use_reactive((&width,), move |(width,)| {
         let score = score.read();
-        let mut staves = layout_staves(&score.measures, width, LINE_HEIGHT);
+        let mut staves = layout_staves(
+            &score.measures,
+            width - 2.0 * STAFF_MARGIN - CLEF_ROOM * LINE_HEIGHT,
+            LINE_HEIGHT,
+        );
         for staff in &mut staves {
             let (Some(first), Some(last)) = (staff.measures.first(), staff.measures.last()) else {
                 continue;
@@ -97,6 +109,8 @@ fn layout_staves(measures: &[Measure], width: f32, line_height: f32) -> Vec<Staf
         first_measure_number,
         measures: vec![],
         widths: vec![],
+        start: STAFF_MARGIN,
+        left: STAFF_MARGIN + CLEF_ROOM * LINE_HEIGHT,
         hairpins: vec![],
     };
     let mut current = empty_staff(1);

@@ -62,10 +62,19 @@ pub fn use_phantom_playhead_data(
                     return None;
                 }
 
-                // Convert mouse x position to estimated timestamp
+                // Convert mouse x position to estimated timestamp. In the
+                // margins, use the nearest end of the staff
                 let mouse_timestamp = scales
                     .iter()
                     .find(|scale| x >= scale.outer_x_bounds.0 && x <= scale.outer_x_bounds.1)
+                    .or_else(|| {
+                        let first = scales.first()?;
+                        if x < first.outer_x_bounds.0 {
+                            Some(first)
+                        } else {
+                            scales.last()
+                        }
+                    })
                     .map_or(0, |scale| scale.get_timestamp(x));
 
                 // Find closest actual note timestamp

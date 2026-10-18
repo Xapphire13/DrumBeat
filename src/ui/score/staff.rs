@@ -2,7 +2,7 @@ use dioxus::prelude::*;
 
 use crate::{
     data::{
-        measure::Measure as MeasureData,
+        measure::{Fill, Measure as MeasureData},
         score::{Hairpin, HairpinKind},
     },
     ui::{
@@ -56,6 +56,8 @@ pub fn Staff(dimensions: StaffDimensions, layout: StaffLayout) -> Element {
         first_measure_number,
         measures,
         widths,
+        start,
+        left,
         hairpins,
     } = layout;
     // A short last staff doesn't fill the whole width
@@ -69,7 +71,7 @@ pub fn Staff(dimensions: StaffDimensions, layout: StaffLayout) -> Element {
     } = use_mouse_position();
     let line_height = height / height_in_lines(!hairpins.is_empty());
     let baseline = HIGHEST_LINE * line_height;
-    let scales = use_scales(&measures, &widths, baseline, line_height);
+    let scales = use_scales(&measures, &widths, left, baseline, line_height);
     let phantom_playhead_data = use_phantom_playhead_data(&mouse_position, &scales(), &measures);
 
     let handle_on_click = {
@@ -90,7 +92,31 @@ pub fn Staff(dimensions: StaffDimensions, layout: StaffLayout) -> Element {
             style: "height: {height}px",
 
             svg { class: "staff", width: "{width}px", height: "{height}px",
-                StaffLines { line_height, baseline, width: content_width }
+                for (measure , scale) in measures.iter().zip(scales()) {
+                    if measure.fill != Fill::Full {
+                        InvalidMeasure { scale, fill: measure.fill, repeat_end: measure.repeat_end }
+                    }
+                }
+
+                StaffLines { line_height, baseline, x_bounds: (start, left + content_width) }
+
+                // Open the staff with a bar line and a percussion clef
+                line {
+                    x1: "{start}",
+                    y1: "{baseline - BOTTOM_STAFF_LINE * line_height}",
+                    x2: "{start}",
+                    y2: "{baseline - TOP_STAFF_LINE * line_height}",
+                }
+                for offset in [0.6, 1.15] {
+                    rect {
+                        x: start + offset * line_height,
+                        y: baseline - 2.5 * line_height,
+                        width: 0.3 * line_height,
+                        height: 2.0 * line_height,
+                        fill: "black",
+                        stroke: "none",
+                    }
+                }
 
                 for hairpin in hairpins {
                     HairpinMark {
@@ -169,6 +195,54 @@ pub fn Staff(dimensions: StaffDimensions, layout: StaffLayout) -> Element {
     }
 }
 
+/// A highlight behind a measure whose beats don't add up to its time
+/// signature, with a note above the staff saying what's wrong
+#[component]
+fn InvalidMeasure(scale: MeasureScale, fill: Fill, repeat_end: Option<u32>) -> Element {
+    let unit = scale.unit;
+    let (left, right) = scale.outer_x_bounds;
+    let top = scale.get_y(TOP_STAFF_LINE + 1.0);
+    let bottom = scale.get_y(BOTTOM_STAFF_LINE - 1.0);
+    let (label, description) = match fill {
+        Fill::Short => (
+            "Short bar",
+            "The beats in this bar don't fill its time signature, so the rest of it is silent",
+        ),
+        Fill::Over { .. } | Fill::Full => (
+            "Long bar",
+            "The beats in this bar run past its time signature, so it has been lengthened to fit them",
+        ),
+    };
+    // Keep clear of a repeat's play count, which sits in the same corner
+    let label_right = right
+        - 0.9 * unit
+        - if repeat_end.is_some_and(|count| count != 2) {
+            2.0 * unit
+        } else {
+            0.0
+        };
+
+    rsx! {
+        rect {
+            class: "invalid-measure",
+            x: left,
+            y: top,
+            width: right - left,
+            height: bottom - top,
+            title { "{description}" }
+        }
+        text {
+            class: "invalid-measure-label",
+            x: label_right,
+            y: scale.get_y(TOP_STAFF_LINE) - 0.35 * unit,
+            font_size: 0.75 * unit,
+            text_anchor: "end",
+            title { "{description}" }
+            "⚠ {label}"
+        }
+    }
+}
+
 /// Show the numbers a measure is played as, e.g. "5" or, when it repeats,
 /// "1–4" or "97, 99, 101"
 fn format_measure_numbers(numbers: &[usize]) -> String {
@@ -194,13 +268,14 @@ fn format_measure_numbers(numbers: &[usize]) -> String {
 fn use_scales(
     measures: &Vec<MeasureData>,
     widths: &Vec<f32>,
+    left: f32,
     baseline: f32,
     line_height: f32,
 ) -> Memo<Vec<MeasureScale>> {
     use_memo(use_reactive(
-        (measures, widths, &baseline),
-        move |(measures, widths, baseline)| {
-            let mut left_bound = 0.0;
+        (measures, widths, &left, &baseline),
+        move |(measures, widths, left, baseline)| {
+            let mut left_bound = left;
             measures
                 .iter()
                 .zip(&widths)
