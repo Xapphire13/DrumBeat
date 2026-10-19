@@ -64,6 +64,7 @@ impl GpScore {
                 repeat_start: bar.repeat_start,
                 repeat_end: bar.repeat_end,
                 fill: bar_fill(bar),
+                section: bar.section.clone(),
             };
             bar_timestamp += measure.get_length();
             measures.push(measure);
@@ -329,6 +330,7 @@ mod tests {
                 note_value: NoteValue::Quarter,
             },
             repeat_start: false,
+            section: None,
             repeat_end: None,
             fill: Fill::Full,
         }];
@@ -370,6 +372,7 @@ mod tests {
                 note_value: NoteValue::Quarter,
             },
             repeat_start: false,
+            section: None,
             repeat_end: None,
             fill: Fill::Full,
         }];

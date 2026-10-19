@@ -19,6 +19,19 @@ pub struct Measure {
     pub repeat_end: Option<u32>,
     /// Whether the measure's beats add up to its time signature
     pub fill: Fill,
+    /// The labelled part of the song, e.g. "Chorus", that starts at this
+    /// measure
+    pub section: Option<Section>,
+}
+
+/// A labelled part of the song, as Guitar Pro marks it: a rehearsal letter,
+/// a name, or both. At least one is set
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Section {
+    /// e.g. "A"
+    pub letter: Option<String>,
+    /// e.g. "Intro"
+    pub name: Option<String>,
 }
 
 /// How a measure's beats compare with its time signature. Scores that are

@@ -300,6 +300,7 @@ mod tests {
                         note_value,
                     },
                     repeat_start: false,
+                    section: None,
                     repeat_end: (repeat && i == 0).then_some(2),
                     fill: Fill::Full,
                 };

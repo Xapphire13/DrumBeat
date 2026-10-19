@@ -111,7 +111,11 @@ pub fn Score() -> Element {
                     Staff {
                         dimensions: StaffDimensions {
                             width,
-                            height: staff::height(LINE_HEIGHT, !layout.hairpins.is_empty()),
+                            height: staff::height(
+                                LINE_HEIGHT,
+                                !layout.hairpins.is_empty(),
+                                staff::has_sections(&layout.measures),
+                            ),
                             zoom,
                         },
                         layout,

@@ -151,6 +151,17 @@ body {
     user-select: none;
 }
 
+.staff .section-label {
+    fill: black;
+    font-weight: 700;
+}
+
+.staff .section-letter-box {
+    fill: none;
+    stroke: black;
+    stroke-width: 1.5;
+}
+
 .staff .repeat-count {
     fill: black;
     font-weight: 600;

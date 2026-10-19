@@ -1,7 +1,7 @@
 use super::*;
 
 /// A guitar track, then a drum track with two bars:
-/// - bar 0 (7/8, repeat start, "Intro"): voice 0 is a snare triplet ending
+/// - bar 0 (7/8, repeat start, section "A Intro"): voice 0 is a snare triplet ending
 ///   in a rim shot, a dotted-quarter kick tied into the next bar, and a grace
 ///   hi-hat before a quarter rest; voice 1 is a single crash held for the bar
 /// - bar 1 (4/4, repeat end x3): the tied kick as a whole note
@@ -49,7 +49,7 @@ const GPIF: &str = r#"<?xml version="1.0" encoding="utf-8"?>
 <MasterBar>
 <Time>7/8</Time>
 <Repeat start="true" end="false" count="0" />
-<Section><Letter></Letter><Text>
+<Section><Letter>A</Letter><Text>
 Intro
 </Text></Section>
 <Bars>0 1</Bars>
@@ -137,12 +137,41 @@ fn reads_bar_attributes() {
         panic!()
     };
     assert_eq!(first.time_signature.bar_length(), Fraction::new(7, 8));
-    assert_eq!(first.section.as_deref(), Some("Intro"));
+    assert_eq!(
+        first.section,
+        Some(Section {
+            letter: Some("A".into()),
+            name: Some("Intro".into()),
+        })
+    );
     assert!(first.repeat_start);
     assert_eq!(first.repeat_end, None);
     assert_eq!(second.time_signature.bar_length(), Fraction::new(1, 1));
     assert_eq!(second.section, None);
     assert_eq!(second.repeat_end, Some(3));
+}
+
+#[test]
+fn keeps_sections_with_only_a_letter_or_a_name() {
+    let section = |letter: &str, text: &str| gpif::Section {
+        letter: Some(letter.into()),
+        text: Some(text.into()),
+    };
+    assert_eq!(
+        convert_section(&section("B", " ")),
+        Some(Section {
+            letter: Some("B".into()),
+            name: None,
+        })
+    );
+    assert_eq!(
+        convert_section(&section("", "Verse")),
+        Some(Section {
+            letter: None,
+            name: Some("Verse".into()),
+        })
+    );
+    assert_eq!(convert_section(&section(" ", "")), None);
 }
 
 #[test]

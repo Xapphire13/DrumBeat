@@ -224,6 +224,7 @@ mod tests {
                 note_value: NoteValue::Quarter,
             },
             repeat_start: false,
+            section: None,
             repeat_end: None,
             fill: Fill::Full,
         };

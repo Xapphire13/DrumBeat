@@ -5,7 +5,7 @@ use dioxus::{html::input_data::MouseButton, prelude::*};
 use crate::{
     data::{
         loop_range::{LoopPoint, count_label},
-        measure::{Fill, Measure as MeasureData},
+        measure::{Fill, Measure as MeasureData, Section},
         position::Position,
         score::{Hairpin, HairpinKind},
     },
@@ -50,14 +50,28 @@ const HAIRPIN_BAND: f32 = 1.5;
 /// How wide a hairpin opens, in lines
 const HAIRPIN_OPENING: f32 = 0.9;
 
+/// Extra room above a staff where a section starts, clear of the stems,
+/// beams and measure numbers, in lines
+const SECTION_BAND: f32 = 2.0;
+
+/// Room above the bottom staff line's baseline, in lines
+fn top_in_lines(has_sections: bool) -> f32 {
+    HIGHEST_LINE + if has_sections { SECTION_BAND } else { 0.0 }
+}
+
 /// The staff's height in lines
-fn height_in_lines(has_hairpins: bool) -> f32 {
-    HIGHEST_LINE - LOWEST_LINE + if has_hairpins { HAIRPIN_BAND } else { 0.0 }
+fn height_in_lines(has_hairpins: bool, has_sections: bool) -> f32 {
+    top_in_lines(has_sections) - LOWEST_LINE + if has_hairpins { HAIRPIN_BAND } else { 0.0 }
 }
 
 /// Height of a staff drawn with the given line height
-pub fn height(line_height: f32, has_hairpins: bool) -> f32 {
-    height_in_lines(has_hairpins) * line_height
+pub fn height(line_height: f32, has_hairpins: bool, has_sections: bool) -> f32 {
+    height_in_lines(has_hairpins, has_sections) * line_height
+}
+
+/// Whether a section starts on any of the measures
+pub fn has_sections(measures: &[MeasureData]) -> bool {
+    measures.iter().any(|measure| measure.section.is_some())
 }
 
 #[component]
@@ -84,8 +98,9 @@ pub fn Staff(dimensions: StaffDimensions, layout: StaffLayout) -> Element {
         handle_on_mouse_move,
         handle_on_mouse_leave,
     } = use_mouse_position();
-    let line_height = height / height_in_lines(!hairpins.is_empty());
-    let baseline = HIGHEST_LINE * line_height;
+    let with_sections = has_sections(&measures);
+    let line_height = height / height_in_lines(!hairpins.is_empty(), with_sections);
+    let baseline = top_in_lines(with_sections) * line_height;
     let scales = use_scales(&measures, &widths, left, baseline, line_height);
     // The mouse is in window pixels, while the staff is laid out unzoomed
     let mouse_position = mouse_position.map(|Position { x, y }| Position {
@@ -284,6 +299,9 @@ pub fn Staff(dimensions: StaffDimensions, layout: StaffLayout) -> Element {
                 // Measures
                 {
                     let number_of_measures = measures.len();
+                    let section_starts: Vec<bool> =
+                        measures.iter().map(|measure| measure.section.is_some()).collect();
+                    let staff_end = left + content_width;
                     let performance = score.read().performance.clone();
                     measures
                         .into_iter()
@@ -296,6 +314,14 @@ pub fn Staff(dimensions: StaffDimensions, layout: StaffLayout) -> Element {
                             let measure_number = format_measure_numbers(
                                 &performance.measure_numbers(first_measure_number - 1 + i),
                             );
+                            // A section's name stops short of the next one on
+                            // the staff
+                            let section_end = scales
+                                .iter()
+                                .zip(&section_starts)
+                                .skip(i + 1)
+                                .find(|(_, starts)| **starts)
+                                .map_or(staff_end, |(scale, _)| scale.outer_x_bounds.0);
                             Some(rsx! {
                                 // Draw vertical line between measures
                                 if i > 0 {
@@ -321,6 +347,15 @@ pub fn Staff(dimensions: StaffDimensions, layout: StaffLayout) -> Element {
                                     y: top - 0.35 * scale.unit,
                                     font_size: 0.75 * scale.unit,
                                     "{measure_number}"
+                                }
+                                if let Some(section) = measure.section.clone() {
+                                    SectionLabel {
+                                        section,
+                                        x: left + 2.,
+                                        end: section_end,
+                                        y: scale.get_y(HIGHEST_LINE + 0.35),
+                                        line_height,
+                                    }
                                 }
                                 RepeatSigns {
                                     scale: scale.clone(),
@@ -618,6 +653,60 @@ fn HairpinMark(hairpin: Hairpin, measures: Vec<MeasureData>, scales: Vec<Measure
             fill: "none",
             stroke: "black",
             stroke_width: 1.2,
+        }
+    }
+}
+
+/// Where a section of the song starts, as Guitar Pro marks it: the
+/// rehearsal letter in a box, then the name in bold. `y` is the bottom of the
+/// label, and the name is cut off at `end`
+#[component]
+fn SectionLabel(section: Section, x: f32, end: f32, y: f32, line_height: f32) -> Element {
+    let font_size = 0.9 * line_height;
+    let box_size = 1.15 * line_height;
+    let text_y = y - 0.3 * line_height;
+    // Wide enough for a letter or two
+    let letter_width = section.letter.as_ref().map(|letter| {
+        box_size.max(0.62 * font_size * letter.chars().count() as f32 + 0.5 * line_height)
+    });
+    let name_x = letter_width.map_or(x, |width| x + width + 0.35 * line_height);
+    // Room for the name, keeping a gap before whatever comes next
+    let name_width = (end - name_x - 0.4 * line_height).max(0.);
+
+    rsx! {
+        if let Some((letter, width)) = section.letter.zip(letter_width) {
+            rect {
+                class: "section-letter-box",
+                x,
+                y: y - box_size,
+                width,
+                height: box_size,
+                rx: 0.12 * line_height,
+            }
+            text {
+                class: "section-label",
+                x: x + width / 2.,
+                y: text_y,
+                font_size,
+                text_anchor: "middle",
+                "{letter}"
+            }
+        }
+        if let Some(name) = section.name {
+            svg {
+                x: name_x,
+                y: y - 2. * line_height,
+                width: name_width,
+                height: 2. * line_height,
+                overflow: "hidden",
+                text {
+                    class: "section-label",
+                    x: 0,
+                    y: text_y - (y - 2. * line_height),
+                    font_size,
+                    "{name}"
+                }
+            }
         }
     }
 }

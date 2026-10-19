@@ -142,6 +142,7 @@ pub struct Repeat {
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "PascalCase")]
 pub struct Section {
+    pub letter: Option<String>,
     pub text: Option<String>,
 }
 

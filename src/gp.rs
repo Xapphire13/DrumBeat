@@ -16,6 +16,8 @@ use std::path::Path;
 
 pub use fraction::Fraction;
 
+use crate::data::measure::Section;
+
 const SCORE_ENTRY: &str = "Content/score.gpif";
 
 #[derive(Clone, PartialEq, Debug)]
@@ -53,7 +55,7 @@ impl TimeSignature {
 #[derive(Clone, PartialEq, Debug)]
 pub struct GpBar {
     pub time_signature: TimeSignature,
-    pub section: Option<String>,
+    pub section: Option<Section>,
     pub repeat_start: bool,
     /// How many times the repeated passage is played, when a repeat ends here
     pub repeat_end: Option<u32>,
@@ -359,13 +361,7 @@ pub fn parse_gpif(xml: &str) -> Result<GpScore, GpError> {
             let repeat = master_bar.repeat.as_ref();
             Ok(GpBar {
                 time_signature: parse_time_signature(&master_bar.time)?,
-                section: master_bar
-                    .section
-                    .as_ref()
-                    .and_then(|s| s.text.as_deref())
-                    .map(str::trim)
-                    .filter(|text| !text.is_empty())
-                    .map(String::from),
+                section: master_bar.section.as_ref().and_then(convert_section),
                 repeat_start: repeat.is_some_and(|r| r.start),
                 repeat_end: repeat.filter(|r| r.end).map(|r| r.count),
                 voices,
@@ -419,6 +415,20 @@ fn parse_id(id: &str) -> Result<usize, GpError> {
 
 fn parse_ids(ids: &str) -> Result<Vec<usize>, GpError> {
     ids.split_whitespace().map(parse_id).collect()
+}
+
+/// A bar's section, dropping blank letters and names, and the section itself
+/// when both are blank
+fn convert_section(section: &gpif::Section) -> Option<Section> {
+    let clean = |text: &Option<String>| {
+        text.as_deref()
+            .map(str::trim)
+            .filter(|text| !text.is_empty())
+            .map(String::from)
+    };
+    let letter = clean(&section.letter);
+    let name = clean(&section.text);
+    (letter.is_some() || name.is_some()).then_some(Section { letter, name })
 }
 
 fn parse_time_signature(time: &str) -> Result<TimeSignature, GpError> {

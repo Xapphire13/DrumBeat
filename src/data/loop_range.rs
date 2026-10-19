@@ -224,6 +224,7 @@ mod tests {
                         note_value: NoteValue::Quarter,
                     },
                     repeat_start,
+                    section: None,
                     rests: vec![],
                     grace_notes: vec![],
                     repeat_end,
