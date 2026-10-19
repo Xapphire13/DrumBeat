@@ -2,7 +2,12 @@
 // UTTypes, which would need another framework for the same result
 #![allow(deprecated)]
 
-use std::{cell::RefCell, path::PathBuf};
+use std::{
+    cell::{Cell, RefCell},
+    path::PathBuf,
+};
+
+use block2::RcBlock;
 
 use objc2::{
     DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send,
@@ -14,7 +19,8 @@ use objc2_core_foundation::{CGFloat, CGPoint, CGRect, CGSize};
 use objc2_foundation::{NSArray, NSObject, NSObjectProtocol, NSString, NSURL};
 use objc2_ui_kit::{
     UIApplication, UIColor, UIDocumentPickerDelegate, UIDocumentPickerMode,
-    UIDocumentPickerViewController, UIView, UIViewAutoresizing, UIViewController,
+    UIDocumentPickerViewController, UIView, UIViewAnimationOptions, UIViewAutoresizing,
+    UIViewController,
 };
 use tokio::sync::oneshot;
 
@@ -121,9 +127,16 @@ pub fn prepare_audio() {
 const TOOLBAR: u32 = 0x0f1116;
 const PLAYBACK_BAR: u32 = 0x161922;
 
+/// The metronome stage's flash on an accented first beat, and how long it
+/// takes to fade, as in main.css
+const FLASH: u32 = 0x1e1938;
+const FLASH_FADE_SECONDS: f64 = 0.26;
+
 thread_local! {
     /// The strip along the bottom, behind the web view, once it's made
     static BOTTOM_STRIP: RefCell<Option<Retained<UIView>>> = const { RefCell::new(None) };
+    /// Its colour when it isn't flashing
+    static BOTTOM_COLOR: Cell<u32> = const { Cell::new(TOOLBAR) };
 }
 
 /// The web view lets what's behind it show through beyond the page: the
@@ -133,17 +146,43 @@ pub fn color_safe_areas(playback_bar_below: bool) {
     let Some(mtm) = MainThreadMarker::new() else {
         return;
     };
-    let bottom = color(if playback_bar_below {
+    let rgb = if playback_bar_below {
         PLAYBACK_BAR
     } else {
         TOOLBAR
-    });
+    };
+    BOTTOM_COLOR.set(rgb);
+    let bottom = color(rgb);
     BOTTOM_STRIP.with_borrow_mut(|strip| {
         if strip.is_none() {
             *strip = make_bottom_strip(mtm);
         }
         if let Some(strip) = strip {
             strip.setBackgroundColor(Some(&bottom));
+        }
+    });
+}
+
+pub fn flash_bottom_safe_area() {
+    let Some(mtm) = MainThreadMarker::new() else {
+        return;
+    };
+    BOTTOM_STRIP.with_borrow(|strip| {
+        let Some(strip) = strip.clone() else {
+            return;
+        };
+        strip.setBackgroundColor(Some(&color(FLASH)));
+        let base = color(BOTTOM_COLOR.get());
+        let fade = RcBlock::new(move || strip.setBackgroundColor(Some(&base)));
+        unsafe {
+            UIView::animateWithDuration_delay_options_animations_completion(
+                FLASH_FADE_SECONDS,
+                0.0,
+                UIViewAnimationOptions::CurveEaseOut | UIViewAnimationOptions::AllowUserInteraction,
+                &fade,
+                None,
+                mtm,
+            );
         }
     });
 }

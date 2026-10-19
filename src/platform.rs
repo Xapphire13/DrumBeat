@@ -41,3 +41,10 @@ pub fn color_safe_areas(playback_bar_below: bool) {
     #[cfg(not(target_os = "ios"))]
     let _ = playback_bar_below;
 }
+
+/// Flashes the strip under the home indicator along with the metronome's
+/// stage, which can't reach it
+pub fn flash_bottom_safe_area() {
+    #[cfg(target_os = "ios")]
+    ios::flash_bottom_safe_area();
+}

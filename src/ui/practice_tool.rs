@@ -100,6 +100,12 @@ fn Stage() -> Element {
         && options.beats.first() == Some(&BeatKind::Accent)
         && click.is_some_and(|click| click.beat == 0 && click.sub == 0);
 
+    // The stage can't reach the strip under the home indicator, so it's
+    // flashed alongside
+    use_effect(use_reactive!(|flash| if flash {
+        platform::flash_bottom_safe_area();
+    }));
+
     let slider_fill = f64::from(bpm - MIN_BPM) / f64::from(MAX_BPM - MIN_BPM) * 100.0;
 
     rsx! {
