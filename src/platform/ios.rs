@@ -121,48 +121,64 @@ pub fn prepare_audio() {
 const TOOLBAR: u32 = 0x0f1116;
 const PLAYBACK_BAR: u32 = 0x161922;
 
+thread_local! {
+    /// The strip along the bottom, behind the web view, once it's made
+    static BOTTOM_STRIP: RefCell<Option<Retained<UIView>>> = const { RefCell::new(None) };
+}
+
 /// The web view lets what's behind it show through beyond the page: the
-/// window in the toolbar's colour, with a strip in the playback bar's along
-/// the bottom
-pub fn color_safe_areas() {
+/// window in the toolbar's colour, with a strip along the bottom in the
+/// colour of what's above it
+pub fn color_safe_areas(playback_bar_below: bool) {
     let Some(mtm) = MainThreadMarker::new() else {
         return;
     };
-    let Some(web_view_class) = AnyClass::get(c"WKWebView") else {
-        return;
-    };
-    for window in UIApplication::sharedApplication(mtm).windows() {
-        window.setBackgroundColor(Some(&color(TOOLBAR)));
-        let Some(web_view) = find_view(&window, web_view_class) else {
-            continue;
-        };
-        let Some(container) = web_view.superview() else {
-            continue;
-        };
-        unsafe {
-            let clear = UIColor::clearColor();
-            web_view.setOpaque(false);
-            web_view.setBackgroundColor(Some(&clear));
-            let _: () = msg_send![&*web_view, setUnderPageBackgroundColor: &*clear];
+    let bottom = color(if playback_bar_below {
+        PLAYBACK_BAR
+    } else {
+        TOOLBAR
+    });
+    BOTTOM_STRIP.with_borrow_mut(|strip| {
+        if strip.is_none() {
+            *strip = make_bottom_strip(mtm);
         }
+        if let Some(strip) = strip {
+            strip.setBackgroundColor(Some(&bottom));
+        }
+    });
+}
 
-        let bounds = container.bounds();
-        let inset = container.safeAreaInsets().bottom;
-        let strip = UIView::initWithFrame(
-            UIView::alloc(mtm),
-            CGRect::new(
-                CGPoint::new(0.0, bounds.size.height - inset),
-                CGSize::new(bounds.size.width, inset),
-            ),
-        );
-        strip.setBackgroundColor(Some(&color(PLAYBACK_BAR)));
-        unsafe {
-            strip.setAutoresizingMask(
-                UIViewAutoresizing::FlexibleWidth | UIViewAutoresizing::FlexibleTopMargin,
-            );
-            container.insertSubview_belowSubview(&strip, &web_view);
-        }
+fn make_bottom_strip(mtm: MainThreadMarker) -> Option<Retained<UIView>> {
+    let web_view_class = AnyClass::get(c"WKWebView")?;
+    let window = UIApplication::sharedApplication(mtm)
+        .windows()
+        .firstObject()?;
+    window.setBackgroundColor(Some(&color(TOOLBAR)));
+    let web_view = find_view(&window, web_view_class)?;
+    let container = web_view.superview()?;
+    unsafe {
+        let clear = UIColor::clearColor();
+        web_view.setOpaque(false);
+        web_view.setBackgroundColor(Some(&clear));
+        let _: () = msg_send![&*web_view, setUnderPageBackgroundColor: &*clear];
     }
+
+    let bounds = container.bounds();
+    let inset = container.safeAreaInsets().bottom;
+    let strip = UIView::initWithFrame(
+        UIView::alloc(mtm),
+        CGRect::new(
+            CGPoint::new(0.0, bounds.size.height - inset),
+            CGSize::new(bounds.size.width, inset),
+        ),
+    );
+    unsafe {
+        strip.setAutoresizingMask(
+            UIViewAutoresizing::FlexibleWidth | UIViewAutoresizing::FlexibleTopMargin,
+        );
+        container.insertSubview_belowSubview(&strip, &web_view);
+    }
+    Some(strip)
 }
 
 fn find_view(view: &UIView, class: &AnyClass) -> Option<Retained<UIView>> {

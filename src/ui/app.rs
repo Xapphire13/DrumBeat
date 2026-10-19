@@ -36,7 +36,9 @@ pub fn App() -> Element {
     use_settings_sheet_provider();
     let view = use_view_provider();
     use_keyboard_shortcuts();
-    use_effect(platform::color_safe_areas);
+    let settings_sheet = use_settings_sheet();
+    // The metronome's settings sheet is the playback bar's colour too
+    use_effect(move || platform::color_safe_areas(view() == View::Score || settings_sheet()));
 
     rsx! {
         document::Link { rel: "stylesheet", href: MAIN_CSS }

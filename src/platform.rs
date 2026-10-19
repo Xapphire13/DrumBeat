@@ -33,8 +33,11 @@ pub fn prepare_audio() {
 }
 
 /// Colours the strips iOS keeps clear of the notch and home indicator to
-/// match what borders them: the toolbar above, and the playback bar below
-pub fn color_safe_areas() {
+/// match what borders them: the toolbar above, and below either the playback
+/// bar's colour or the page's
+pub fn color_safe_areas(playback_bar_below: bool) {
     #[cfg(target_os = "ios")]
-    ios::color_safe_areas();
+    ios::color_safe_areas(playback_bar_below);
+    #[cfg(not(target_os = "ios"))]
+    let _ = playback_bar_below;
 }
