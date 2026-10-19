@@ -100,11 +100,7 @@ fn Stage() -> Element {
         && options.beats.first() == Some(&BeatKind::Accent)
         && click.is_some_and(|click| click.beat == 0 && click.sub == 0);
 
-    // The stage can't reach the strip under the home indicator, so it's
-    // flashed alongside
-    use_effect(use_reactive!(|flash| if flash {
-        platform::flash_bottom_safe_area();
-    }));
+    use_safe_area_flash();
 
     let slider_fill = f64::from(bpm - MIN_BPM) / f64::from(MAX_BPM - MIN_BPM) * 100.0;
 
@@ -203,6 +199,25 @@ fn Stage() -> Element {
             }
         }
     }
+}
+
+/// The stage can't reach the strip under the home indicator, so that's
+/// flashed as the stage's flash starts, rather than as it's asked for, to
+/// keep the two in step
+fn use_safe_area_flash() {
+    use_future(|| async {
+        if !cfg!(target_os = "ios") {
+            return;
+        }
+        let mut listener = document::eval(
+            r#"document.addEventListener("animationstart", (event) => {
+                if (event.animationName === "stage-flash") dioxus.send(true);
+            });"#,
+        );
+        while listener.recv::<bool>().await.is_ok() {
+            platform::flash_bottom_safe_area();
+        }
+    });
 }
 
 /// − or +: a tap moves the tempo by 1 BPM, and holding it steps by
