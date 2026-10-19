@@ -14,7 +14,7 @@ pub enum Sound {
     MidTom,
     LowTom,
     VeryLowTom,
-    HighFloorTom,
+    FloorTom,
     LowFloorTom,
     HihatClosed,
     HihatHalfOpen,
@@ -51,7 +51,7 @@ impl Sound {
             DrumVoice::MidTom => Sound::MidTom,
             DrumVoice::LowTom => Sound::LowTom,
             DrumVoice::VeryLowTom => Sound::VeryLowTom,
-            DrumVoice::HighFloorTom => Sound::HighFloorTom,
+            DrumVoice::FloorTom => Sound::FloorTom,
             DrumVoice::LowFloorTom => Sound::LowFloorTom,
             DrumVoice::HihatClosed => Sound::HihatClosed,
             DrumVoice::HihatHalfOpen => Sound::HihatHalfOpen,
@@ -90,7 +90,7 @@ impl Sound {
             | Sound::MidTom
             | Sound::LowTom
             | Sound::VeryLowTom
-            | Sound::HighFloorTom
+            | Sound::FloorTom
             | Sound::LowFloorTom => 0.8,
             Sound::HihatClosed | Sound::HihatHalfOpen | Sound::HihatOpen => 0.45,
             Sound::HihatPedal => 0.35,
@@ -118,8 +118,8 @@ impl Sound {
             Sound::HighTom => 0.22,
             Sound::MidTom => 0.25,
             Sound::LowTom => 0.28,
-            Sound::VeryLowTom => 0.3,
-            Sound::HighFloorTom => 0.33,
+            Sound::FloorTom => 0.3,
+            Sound::VeryLowTom => 0.33,
             Sound::LowFloorTom => 0.36,
             Sound::HihatClosed => 0.035,
             Sound::HihatPedal => 0.025,
@@ -207,7 +207,7 @@ impl Voice {
             | Sound::MidTom
             | Sound::LowTom
             | Sound::VeryLowTom
-            | Sound::HighFloorTom
+            | Sound::FloorTom
             | Sound::LowFloorTom => Biquad::passthrough(),
         };
 
@@ -280,14 +280,14 @@ impl Voice {
             | Sound::MidTom
             | Sound::LowTom
             | Sound::VeryLowTom
-            | Sound::HighFloorTom
+            | Sound::FloorTom
             | Sound::LowFloorTom => {
                 let pitch = match self.sound {
                     Sound::HighTom => 220.0,
                     Sound::MidTom => 180.0,
                     Sound::LowTom => 150.0,
-                    Sound::VeryLowTom => 125.0,
-                    Sound::HighFloorTom => 105.0,
+                    Sound::FloorTom => 125.0,
+                    Sound::VeryLowTom => 105.0,
                     _ => 90.0,
                 };
                 let tone = self.sine(pitch * (1.0 + 0.5 * decay(t, 0.05)));
@@ -496,7 +496,7 @@ mod tests {
             Sound::MidTom,
             Sound::LowTom,
             Sound::VeryLowTom,
-            Sound::HighFloorTom,
+            Sound::FloorTom,
             Sound::LowFloorTom,
             Sound::HihatClosed,
             Sound::HihatHalfOpen,

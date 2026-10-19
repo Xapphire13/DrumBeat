@@ -12,7 +12,7 @@ pub enum DrumPiece {
     MidTom,
     LowTom,
     VeryLowTom,
-    HighFloorTom,
+    FloorTom,
     LowFloorTom,
     Crash,
     Ride,

@@ -20,6 +20,7 @@ use crate::{
             StaffDimensions, StaffLayout,
             measure::Measure,
             measure_scale::MeasureScale,
+            note::HoveredNote,
             staff::{
                 loop_marks::{LoopGeometry, LoopMarks, closest_loop_point},
                 phantom_playhead::{PhantomPlayhead, closest_snap, use_phantom_playhead_data},
@@ -93,6 +94,8 @@ pub fn Staff(dimensions: StaffDimensions, layout: StaffLayout) -> Element {
     });
     let phantom_playhead_data = use_phantom_playhead_data(&mouse_position, &scales(), &measures);
     let mut container = use_signal(|| None::<Rc<MountedData>>);
+    // Set by the note heads as the pointer moves over them
+    use_context_provider(|| Signal::new(None::<HoveredNote>));
     let span = measures
         .first()
         .zip(measures.last())
@@ -360,9 +363,48 @@ pub fn Staff(dimensions: StaffDimensions, layout: StaffLayout) -> Element {
                     }
                 }
             }
+
+            NoteTooltip { zoom }
         }
     }
 }
+
+/// Names the voice of the note head under the pointer, and Guitar Pro's
+/// number for it, just above the head, or below it when the score's scrolled
+/// so there's no room above
+#[component]
+fn NoteTooltip(zoom: f32) -> Element {
+    let hovered = use_context::<Signal<Option<HoveredNote>>>();
+    use_effect(move || {
+        if hovered().is_some() {
+            // Only the page knows where the tooltip is within the scrolling
+            // view. It fades in after a moment, so moving it isn't seen
+            document::eval(PLACE_TOOLTIP);
+        }
+    });
+    let Some(note) = hovered() else {
+        return rsx! {};
+    };
+    rsx! {
+        div {
+            class: "note-tooltip",
+            style: "left: {note.x * zoom}px; top: {note.top * zoom}px; --below: {note.bottom * zoom}px",
+            "{note.label}"
+        }
+    }
+}
+
+/// Puts the tooltip below its note when it would be cut off at the top of
+/// the scrolling staves
+const PLACE_TOOLTIP: &str = r#"
+const tooltip = document.querySelector(".note-tooltip");
+const view = tooltip && tooltip.closest(".staves");
+if (view) {
+    tooltip.classList.remove("below");
+    const cut = tooltip.getBoundingClientRect().top < view.getBoundingClientRect().top;
+    tooltip.classList.toggle("below", cut);
+}
+"#;
 
 /// One of the tabs for dragging the loop's ends
 struct TabData {

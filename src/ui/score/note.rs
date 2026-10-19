@@ -34,6 +34,18 @@ fn ledger_lines(line_number: f32) -> Vec<f32> {
     lines
 }
 
+/// The note head under the pointer, for the staff to name in a tooltip
+#[derive(Clone, PartialEq, Debug)]
+pub struct HoveredNote {
+    /// The voice and Guitar Pro's number for it, e.g. "Snare (rim shot) · 91"
+    pub label: String,
+    /// The middle of the head, and its top and bottom, in the staff's
+    /// unzoomed coordinates
+    pub x: f32,
+    pub top: f32,
+    pub bottom: f32,
+}
+
 /// A note head, with any ledger lines it needs. Stems and beams are drawn
 /// separately, per chord. Hovering it names the voice and Guitar Pro's number
 /// for it
@@ -55,10 +67,27 @@ pub fn Note(
         .into_iter()
         .map(|line| scale.get_y(line))
         .collect();
+    let hovered = try_use_context::<Signal<Option<HoveredNote>>>();
+    let label = format!("{} · {gp_note}", voice.name());
+    let (top, bottom) = (y - size, y + size);
 
     rsx! {
-        g { class: "note-head",
-            title { "{voice.name()} · {gp_note}" }
+        g {
+            onmouseenter: move |_| {
+                if let Some(mut hovered) = hovered {
+                    hovered.set(Some(HoveredNote {
+                        label: label.clone(),
+                        x,
+                        top,
+                        bottom,
+                    }));
+                }
+            },
+            onmouseleave: move |_| {
+                if let Some(mut hovered) = hovered {
+                    hovered.set(None);
+                }
+            },
             // Something to hover over between the thin lines of an X
             rect {
                 x: x - size,
@@ -66,6 +95,7 @@ pub fn Note(
                 width: 2.0 * size,
                 height: 2.0 * size,
                 fill: "transparent",
+                stroke: "none",
             }
             for ledger_y in ledger_ys {
                 line {

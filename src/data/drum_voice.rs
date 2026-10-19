@@ -2,7 +2,8 @@ use super::drum_piece::DrumPiece;
 
 /// One sound of the kit, e.g. the ride's bell or a choked crash. Guitar Pro
 /// gives each its own note number, which follows General MIDI for the common
-/// sounds and adds its own for the rest
+/// sounds and adds its own for the rest. The toms are named for a kit with a
+/// high, mid and floor tom, which Guitar Pro numbers 50, 48 and 45
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum DrumVoice {
     Kick,
@@ -20,7 +21,7 @@ pub enum DrumVoice {
     MidTom,
     LowTom,
     VeryLowTom,
-    HighFloorTom,
+    FloorTom,
     LowFloorTom,
     RideEdge,
     RideMiddle,
@@ -69,11 +70,11 @@ impl DrumVoice {
             92 => HihatHalfOpen,
             46 => HihatOpen,
             44 => HihatPedal,
-            48 => HighTom,
-            47 => MidTom,
-            45 => LowTom,
+            50 => HighTom,
+            48 => MidTom,
+            47 => LowTom,
+            45 => FloorTom,
             43 => VeryLowTom,
-            50 => HighFloorTom,
             41 => LowFloorTom,
             59 | 93 => RideEdge,
             51 | 126 => RideMiddle,
@@ -110,7 +111,7 @@ impl DrumVoice {
             MidTom => DrumPiece::MidTom,
             LowTom => DrumPiece::LowTom,
             VeryLowTom => DrumPiece::VeryLowTom,
-            HighFloorTom => DrumPiece::HighFloorTom,
+            FloorTom => DrumPiece::FloorTom,
             LowFloorTom => DrumPiece::LowFloorTom,
             RideEdge | RideMiddle | RideBell | RideChoke => DrumPiece::Ride,
             CrashHigh | CrashMedium | CrashHighChoke | CrashMediumChoke => DrumPiece::Crash,
@@ -139,7 +140,7 @@ impl DrumVoice {
             MidTom => "Mid tom",
             LowTom => "Low tom",
             VeryLowTom => "Very low tom",
-            HighFloorTom => "High floor tom",
+            FloorTom => "Floor tom",
             LowFloorTom => "Low floor tom",
             RideEdge => "Ride (edge)",
             RideMiddle => "Ride (middle)",
@@ -175,11 +176,11 @@ impl DrumVoice {
             HihatClosed => 42,
             HihatHalfOpen | HihatOpen => 46,
             HihatPedal => 44,
-            HighTom => 48,
-            MidTom => 47,
-            LowTom => 45,
+            HighTom => 50,
+            MidTom => 48,
+            LowTom => 47,
+            FloorTom => 45,
             VeryLowTom => 43,
-            HighFloorTom => 50,
             LowFloorTom => 41,
             RideEdge => 59,
             RideMiddle | RideChoke => 51,
@@ -203,7 +204,7 @@ impl DrumVoice {
             | RideMiddle | RideChoke | CrashHigh | CrashMedium | CrashHighChoke
             | CrashMediumChoke | China | ChinaChoke | Splash | SplashChoke => NoteHead::X,
             Kick | Kick2 | Snare | SnareElectric | RimShot | HighTom | MidTom | LowTom
-            | VeryLowTom | HighFloorTom | LowFloorTom => NoteHead::Normal,
+            | VeryLowTom | FloorTom | LowFloorTom => NoteHead::Normal,
         }
     }
 
