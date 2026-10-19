@@ -36,6 +36,7 @@ pub fn App() -> Element {
     use_settings_sheet_provider();
     let view = use_view_provider();
     use_keyboard_shortcuts();
+    use_effect(platform::color_safe_areas);
 
     rsx! {
         document::Link { rel: "stylesheet", href: MAIN_CSS }

@@ -1657,6 +1657,7 @@ dependencies = [
  "midir",
  "objc2 0.6.5",
  "objc2-avf-audio",
+ "objc2-core-foundation",
  "objc2-foundation",
  "objc2-ui-kit",
  "quick-xml",

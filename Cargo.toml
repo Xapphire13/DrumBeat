@@ -28,8 +28,9 @@ trackpad_haptic = "0.1.1"
 [target.'cfg(target_os = "ios")'.dependencies]
 objc2 = "0.6"
 objc2-avf-audio = { version = "0.3", default-features = false, features = ["std", "AVAudioSession", "AVAudioSessionTypes"] }
+objc2-core-foundation = { version = "0.3", features = ["CFCGTypes"] }
 objc2-foundation = { version = "0.3", features = ["NSArray", "NSString", "NSURL"] }
-objc2-ui-kit = { version = "0.3", features = ["block2", "UIApplication", "UIDocumentPickerViewController", "UIResponder", "UIView", "UIViewController", "UIWindow"] }
+objc2-ui-kit = { version = "0.3", features = ["block2", "UIApplication", "UIColor", "UIDocumentPickerViewController", "UIGeometry", "UIResponder", "UIView", "UIViewController", "UIWindow"] }
 
 [features]
 default = ["desktop"]

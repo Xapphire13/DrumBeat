@@ -5,14 +5,16 @@
 use std::{cell::RefCell, path::PathBuf};
 
 use objc2::{
-    DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send, rc::Retained,
-    runtime::ProtocolObject,
+    DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send,
+    rc::Retained,
+    runtime::{AnyClass, ProtocolObject},
 };
 use objc2_avf_audio::{AVAudioSession, AVAudioSessionCategoryPlayback};
+use objc2_core_foundation::{CGFloat, CGPoint, CGRect, CGSize};
 use objc2_foundation::{NSArray, NSObject, NSObjectProtocol, NSString, NSURL};
 use objc2_ui_kit::{
-    UIApplication, UIDocumentPickerDelegate, UIDocumentPickerMode, UIDocumentPickerViewController,
-    UIViewController,
+    UIApplication, UIColor, UIDocumentPickerDelegate, UIDocumentPickerMode,
+    UIDocumentPickerViewController, UIView, UIViewAutoresizing, UIViewController,
 };
 use tokio::sync::oneshot;
 
@@ -113,4 +115,67 @@ pub fn prepare_audio() {
         }
         let _ = session.setActive_error(true);
     }
+}
+
+/// The toolbar's and the playback bar's backgrounds, as in main.css
+const TOOLBAR: u32 = 0x0f1116;
+const PLAYBACK_BAR: u32 = 0x161922;
+
+/// The web view lets what's behind it show through beyond the page: the
+/// window in the toolbar's colour, with a strip in the playback bar's along
+/// the bottom
+pub fn color_safe_areas() {
+    let Some(mtm) = MainThreadMarker::new() else {
+        return;
+    };
+    let Some(web_view_class) = AnyClass::get(c"WKWebView") else {
+        return;
+    };
+    for window in UIApplication::sharedApplication(mtm).windows() {
+        window.setBackgroundColor(Some(&color(TOOLBAR)));
+        let Some(web_view) = find_view(&window, web_view_class) else {
+            continue;
+        };
+        let Some(container) = web_view.superview() else {
+            continue;
+        };
+        unsafe {
+            let clear = UIColor::clearColor();
+            web_view.setOpaque(false);
+            web_view.setBackgroundColor(Some(&clear));
+            let _: () = msg_send![&*web_view, setUnderPageBackgroundColor: &*clear];
+        }
+
+        let bounds = container.bounds();
+        let inset = container.safeAreaInsets().bottom;
+        let strip = UIView::initWithFrame(
+            UIView::alloc(mtm),
+            CGRect::new(
+                CGPoint::new(0.0, bounds.size.height - inset),
+                CGSize::new(bounds.size.width, inset),
+            ),
+        );
+        strip.setBackgroundColor(Some(&color(PLAYBACK_BAR)));
+        unsafe {
+            strip.setAutoresizingMask(
+                UIViewAutoresizing::FlexibleWidth | UIViewAutoresizing::FlexibleTopMargin,
+            );
+            container.insertSubview_belowSubview(&strip, &web_view);
+        }
+    }
+}
+
+fn find_view(view: &UIView, class: &AnyClass) -> Option<Retained<UIView>> {
+    view.subviews().into_iter().find_map(|subview| {
+        if subview.isKindOfClass(class) {
+            Some(subview)
+        } else {
+            find_view(&subview, class)
+        }
+    })
+}
+
+fn color(rgb: u32) -> Retained<UIColor> {
+    let channel = |shift: u32| CGFloat::from(((rgb >> shift) & 0xff) as u8) / 255.0;
+    unsafe { UIColor::colorWithRed_green_blue_alpha(channel(16), channel(8), channel(0), 1.0) }
 }

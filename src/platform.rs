@@ -31,3 +31,10 @@ pub fn prepare_audio() {
     #[cfg(target_os = "ios")]
     ios::prepare_audio();
 }
+
+/// Colours the strips iOS keeps clear of the notch and home indicator to
+/// match what borders them: the toolbar above, and the playback bar below
+pub fn color_safe_areas() {
+    #[cfg(target_os = "ios")]
+    ios::color_safe_areas();
+}
