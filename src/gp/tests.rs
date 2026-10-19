@@ -285,6 +285,9 @@ fn converts_to_the_app_score() {
     // The snare triplet, the rim shot and the kick in voice 0, then the
     // crash in voice 1. The grace hi-hat takes no time, so it's kept apart
     assert_eq!(timestamps, vec![0, 320, 640, 960, 0]);
+    // The kick is a dotted quarter and the crash a double-dotted half
+    let dots: Vec<u8> = first.notes.iter().map(|n| n.duration.dots).collect();
+    assert_eq!(dots, vec![0, 0, 0, 1, 2]);
     let [grace] = first.grace_notes.as_slice() else {
         panic!("expected one grace note, got {:?}", first.grace_notes);
     };

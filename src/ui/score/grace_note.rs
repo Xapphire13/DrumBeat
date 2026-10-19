@@ -117,6 +117,7 @@ pub fn GraceNotes(scale: MeasureScale, grace_notes: Vec<GraceNote>) -> Element {
         Some(rsx! {
             Note {
                 value: NoteValue::Eighth,
+                dots: 0,
                 voice,
                 gp_note: grace.midi_note,
                 position: Position {

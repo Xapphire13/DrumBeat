@@ -37,6 +37,16 @@ fn ledger_lines(line_number: f32) -> Vec<f32> {
     lines
 }
 
+/// Where a note's dots sit: in its own space, or for a note on a line, the
+/// space above it
+fn dot_line(line_number: f32) -> f32 {
+    if (line_number - BOTTOM_STAFF_LINE).rem_euclid(1.0) < 1e-3 {
+        line_number + 0.5
+    } else {
+        line_number
+    }
+}
+
 /// The note head under the pointer, for the staff to name in a tooltip
 #[derive(Clone, PartialEq, Debug)]
 pub struct HoveredNote {
@@ -55,6 +65,8 @@ pub struct HoveredNote {
 #[component]
 pub fn Note(
     value: NoteValue,
+    /// How many augmentation dots follow the head
+    dots: u8,
     voice: DrumVoice,
     /// Guitar Pro's number for the sound
     gp_note: u8,
@@ -66,7 +78,9 @@ pub fn Note(
     let fill_color = "black";
     let is_hollow = matches!(value, NoteValue::Whole | NoteValue::Half);
     let ledger_half_width = 0.85 * scale.unit;
-    let ledger_ys: Vec<f32> = ledger_lines(MeasureScale::get_line_number(voice.piece()))
+    let line_number = MeasureScale::get_line_number(voice.piece());
+    let dot_y = scale.get_y(dot_line(line_number));
+    let ledger_ys: Vec<f32> = ledger_lines(line_number)
         .into_iter()
         .map(|line| scale.get_y(line))
         .collect();
@@ -159,6 +173,15 @@ pub fn Note(
                     stroke_width: 1.5,
                 }
             }
+            for dot in 0..dots {
+                circle {
+                    cx: x + (0.8 + 0.45 * f32::from(dot)) * scale.unit,
+                    cy: dot_y,
+                    r: 0.15 * scale.unit,
+                    fill: fill_color,
+                    stroke: "none",
+                }
+            }
         }
     }
 }
@@ -178,5 +201,19 @@ mod tests {
         assert_eq!(ledger_lines(5.0), vec![4.5]);
         assert_eq!(ledger_lines(5.5), vec![4.5, 5.5]);
         assert_eq!(ledger_lines(-1.5), vec![-1.5]);
+    }
+
+    #[test]
+    fn dots_sit_in_a_space() {
+        // A note in a space keeps its dot there: kick, snare, hi-hat
+        assert_eq!(dot_line(0.0), 0.0);
+        assert_eq!(dot_line(2.0), 2.0);
+        assert_eq!(dot_line(4.0), 4.0);
+        // A note on a line moves it to the space above: ride, crash, the
+        // hi-hat pedal's ledger line
+        assert_eq!(dot_line(3.5), 4.0);
+        assert_eq!(dot_line(4.5), 5.0);
+        assert_eq!(dot_line(-1.5), -1.0);
+        assert_eq!(dot_line(0.5), 1.0);
     }
 }

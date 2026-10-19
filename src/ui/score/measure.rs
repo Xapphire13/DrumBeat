@@ -92,6 +92,7 @@ pub fn Measure(
                         Some(rsx! {
                             Note {
                                 value: note.duration.value,
+                                dots: note.duration.dots,
                                 voice,
                                 gp_note: note.midi_note,
                                 position: scale.get_position(note.timestamp, voice.piece()),
