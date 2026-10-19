@@ -11,15 +11,25 @@ cpal = "0.18.2"
 dioxus = { version = "0.7.9", features = [] }
 dioxus-desktop = "0.7.9"
 dirs = "7.0.0"
-lucide-dioxus = { version = "3.58.0", features = ["arrows", "files", "layout", "math", "multimedia", "transportation"] }
+lucide-dioxus = { version = "3.58.0", features = ["account", "arrows", "files", "layout", "math", "multimedia", "transportation"] }
 midir = "0.11"
 quick-xml = { version = "0.37", features = ["serialize"] }
-rfd = { version = "0.17", default-features = false }
 serde = { version = "1", features = ["derive"] }
-tokio = { version = "1", features = ["time"] }
+tokio = { version = "1", features = ["sync", "time"] }
 toml_edit = { version = "0.25.17", features = ["serde"] }
-trackpad_haptic = "0.1.1"
 zip = { version = "2.6", default-features = false, features = ["deflate"] }
+
+[target.'cfg(not(target_os = "ios"))'.dependencies]
+rfd = { version = "0.17", default-features = false }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+trackpad_haptic = "0.1.1"
+
+[target.'cfg(target_os = "ios")'.dependencies]
+objc2 = "0.6"
+objc2-avf-audio = { version = "0.3", default-features = false, features = ["std", "AVAudioSession", "AVAudioSessionTypes"] }
+objc2-foundation = { version = "0.3", features = ["NSArray", "NSString", "NSURL"] }
+objc2-ui-kit = { version = "0.3", features = ["block2", "UIApplication", "UIDocumentPickerViewController", "UIResponder", "UIView", "UIViewController", "UIWindow"] }
 
 [features]
 default = ["desktop"]

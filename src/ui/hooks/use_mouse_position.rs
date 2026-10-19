@@ -1,6 +1,6 @@
 use dioxus::{html::geometry::euclid::Point2D, prelude::*};
 
-use crate::data::position::Position;
+use crate::{data::position::Position, platform};
 
 pub struct MousePositionData {
     pub mouse_position: Option<Position>,
@@ -12,6 +12,9 @@ pub fn use_mouse_position() -> MousePositionData {
     let mut mouse_position = use_signal::<Option<Position>>(|| None);
 
     let handle_on_mouse_move = Callback::new(move |ev: MouseEvent| {
+        if !platform::HAS_HOVER {
+            return;
+        }
         let Point2D { x, y, .. } = ev.coordinates().element();
         mouse_position.set(Some(Position {
             x: x as f32,

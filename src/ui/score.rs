@@ -3,6 +3,7 @@ use staff::Staff;
 
 use crate::{
     data::{measure::Measure, score::Hairpin},
+    platform,
     ui::{
         hooks::use_size,
         playback_bar::PlaybackBar,
@@ -150,6 +151,9 @@ document.documentElement.addEventListener("mouseleave", () => update(false));
 
 fn use_hover_tracking(mut loop_editor: LoopEditor) {
     use_future(move || async move {
+        if !platform::HAS_HOVER {
+            return;
+        }
         let mut listener = document::eval(HOVER_LISTENER);
         while let Ok(hovering) = listener.recv::<bool>().await {
             loop_editor.set_hovering_score(hovering);

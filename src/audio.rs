@@ -261,6 +261,7 @@ fn start() -> Result<Sender<Command>, String> {
 }
 
 fn open_stream(commands: Receiver<Command>) -> Result<cpal::Stream, String> {
+    crate::platform::prepare_audio();
     let device = cpal::default_host()
         .default_output_device()
         .ok_or("no output device")?;

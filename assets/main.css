@@ -988,20 +988,20 @@ body {
     background: rgba(139, 108, 255, 0.12);
 }
 
-.toolbar .click-split button {
+:is(.toolbar, .playback-bar) .click-split button {
     color: inherit;
 }
 
-.toolbar .click-split.on button {
+:is(.toolbar, .playback-bar) .click-split.on button {
     color: var(--accent-text);
 }
 
-.toolbar .click-toggle {
+:is(.toolbar, .playback-bar) .click-toggle {
     padding: 0 8px;
     border-radius: 7px 0 0 7px;
 }
 
-.toolbar .click-menu {
+:is(.toolbar, .playback-bar) .click-menu {
     width: 24px;
     border-radius: 0 7px 7px 0;
     border-left: 1px solid #343846;
@@ -1011,7 +1011,7 @@ body {
     border-left-color: rgba(139, 108, 255, 0.4);
 }
 
-.toolbar .click-split.on button:hover {
+:is(.toolbar, .playback-bar) .click-split.on button:hover {
     background: rgba(139, 108, 255, 0.16);
 }
 
@@ -1245,10 +1245,29 @@ button.switch:focus-visible {
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: center;
     gap: 20px;
     padding: 24px;
     overflow: auto;
+}
+
+/* The beats get all the room the controls leave, centred in it */
+.beat-area {
+    flex: 1 0 auto;
+    align-self: stretch;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+}
+
+.stage-controls {
+    flex-shrink: 0;
+    align-self: stretch;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
 }
 
 /* Tints the stage as an accented first beat is heard */
@@ -1545,16 +1564,454 @@ button.switch:focus-visible {
 }
 
 /* Each menu button is lit subtly while its popover is open */
-.toolbar .click-menu[aria-expanded="true"] {
+:is(.toolbar, .playback-bar) .click-menu[aria-expanded="true"] {
     background: #1d2029;
 }
 
-.toolbar .click-split.on .click-menu[aria-expanded="true"] {
+:is(.toolbar, .playback-bar) .click-split.on .click-menu[aria-expanded="true"] {
     background: var(--accent-soft);
 }
 
 @media (prefers-reduced-motion: reduce) {
     .popover-chevron {
         transition: none;
+    }
+}
+
+/* Shown only on a phone, for what the wider layout already has elsewhere */
+body .compact-only {
+    display: none;
+}
+
+/* Popovers and menus a phone shows in place of the wider layout's */
+.more-menu {
+    position: relative;
+}
+
+.toolbar .more-button {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+}
+
+.more-popover {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 6px);
+    z-index: 4;
+    width: 250px;
+    overflow: hidden;
+    border-radius: 14px;
+    background: #1f2229;
+    border: 1px solid #2e323d;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+
+.more-zoom {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    border-bottom: 1px solid #2e323d;
+}
+
+.toolbar .more-zoom button {
+    flex-direction: column;
+    gap: 1px;
+    height: 56px;
+    border-radius: 0;
+    color: #f4f5f7;
+}
+
+.toolbar .more-zoom button + button {
+    border-left: 1px solid #2e323d;
+}
+
+.toolbar .more-zoom button:disabled {
+    color: #4a4f5e;
+}
+
+.more-zoom-percent {
+    font: 600 14px/1 "Geist Mono", var(--mono);
+}
+
+.more-zoom-label {
+    font-size: 11px;
+    color: var(--muted);
+}
+
+.toolbar .more-item {
+    width: 100%;
+    height: 46px;
+    justify-content: space-between;
+    padding: 0 16px;
+    border-radius: 0;
+    color: #f4f5f7;
+    font-size: 16px;
+}
+
+.toolbar .more-item + .more-item {
+    border-top: 1px solid #2e323d;
+}
+
+.toolbar .more-item.danger {
+    border-top: 8px solid #161922;
+    color: #ff8a8a;
+}
+
+.toolbar .more-item:disabled {
+    color: #4a4f5e;
+    cursor: default;
+}
+
+.sheet-header {
+    align-items: center;
+    justify-content: space-between;
+}
+
+.sheet-header h2 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 700;
+}
+
+.practice .sheet-done {
+    height: 44px;
+    padding: 0 4px;
+    color: var(--accent-text);
+    font-size: 16px;
+    font-weight: 600;
+}
+
+/* A phone held upright: the toolbar's tabs take a row of their own, the
+   playback controls stack, popovers rise from the bottom as sheets, and the
+   metronome's settings move into one */
+@media (max-width: 600px) {
+    body .compact-only {
+        display: contents;
+    }
+
+    body .more-menu.compact-only {
+        display: block;
+    }
+
+    body .output-menu-label.compact-only {
+        display: inline;
+    }
+
+    body .labelled-slider.compact-only {
+        display: flex;
+    }
+
+    body .sheet-header.compact-only {
+        display: flex;
+    }
+
+    body .sheet-backdrop.compact-only {
+        display: block;
+    }
+
+    .regular-only,
+    .toolbar .zoom-controls {
+        display: none;
+    }
+
+
+    .toolbar {
+        flex-wrap: wrap;
+        gap: 4px;
+        padding: 4px 8px 10px;
+    }
+
+    .toolbar .open-button {
+        width: 44px;
+        height: 44px;
+        border-radius: 12px;
+    }
+
+    .score-title {
+        flex: 1 1 0;
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-size: 17px;
+    }
+
+    .toolbar .error {
+        order: 2;
+        flex-basis: 100%;
+        padding: 0 8px;
+        font-size: 13px;
+    }
+
+    .view-tabs {
+        order: 1;
+        flex-basis: 100%;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        height: 44px;
+        margin: 4px 8px 0;
+        padding: 3px;
+        border-radius: 12px;
+        background: var(--surface);
+    }
+
+    .toolbar .view-tab {
+        height: 36px;
+        border-radius: 9px;
+        font-size: 14px;
+    }
+
+    .toolbar-end {
+        gap: 4px;
+    }
+
+    .practice-timer {
+        margin-left: 0;
+        padding-right: 4px;
+    }
+
+    /* The bar is no longer a size container, so the sheets it opens are
+       placed against the screen rather than the bar */
+    .playback-bar {
+        container-type: normal;
+    }
+
+    .timeline {
+        margin: 10px 16px 0;
+    }
+
+    .playback-controls {
+        grid-template-columns: auto minmax(0, 1fr);
+        height: auto;
+        gap: 10px 8px;
+        padding: 8px 16px 10px;
+    }
+
+    .playback-position {
+        gap: 8px;
+    }
+
+    .measure-current {
+        font-size: 22px;
+    }
+
+    .measure-total {
+        font-size: 13px;
+    }
+
+    .repeat-pass {
+        padding: 0 8px;
+    }
+
+    .repeat-pass-long {
+        display: none;
+    }
+
+    .repeat-pass-short {
+        display: inline;
+    }
+
+    .transport {
+        justify-self: end;
+        gap: 0;
+    }
+
+    .playback-bar .transport-button {
+        width: 40px;
+    }
+
+    .playback-bar .play-button {
+        width: 52px;
+        height: 52px;
+        margin: 0 4px;
+        border-radius: 26px;
+    }
+
+    .playback-settings {
+        grid-column: 1 / -1;
+        justify-content: stretch;
+        gap: 8px;
+    }
+
+    .click-split {
+        height: 44px;
+        border-radius: 12px;
+    }
+
+    .playback-bar .click-toggle {
+        padding: 0 10px 0 12px;
+        border-radius: 11px 0 0 11px;
+    }
+
+    .playback-bar .click-menu {
+        width: 34px;
+        border-radius: 0 11px 11px 0;
+    }
+
+    .tempo-control {
+        order: 1;
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    .tempo-chip > svg:first-child {
+        display: none;
+    }
+
+    /* The menu stays clear of the dimming its backdrop brings */
+    .more-popover {
+        z-index: 22;
+    }
+
+    .playback-bar .tempo-chip {
+        width: 100%;
+        height: 44px;
+        justify-content: space-between;
+        padding: 0 10px 0 12px;
+        border-radius: 12px;
+    }
+
+    .volume-control {
+        order: 2;
+        gap: 0;
+        height: 44px;
+        box-sizing: border-box;
+        border: 1px solid #343846;
+        border-radius: 12px;
+    }
+
+    .volume-control > .volume-slider,
+    .volume-control > .midi-target {
+        display: none;
+    }
+
+    .playback-bar .mute-button {
+        width: 40px;
+        height: 42px;
+        border-radius: 11px 0 0 11px;
+    }
+
+    .playback-bar .output-menu {
+        width: auto;
+        height: 42px;
+        gap: 6px;
+        margin: 0;
+        padding: 0 10px 0 4px;
+        border-radius: 0 11px 11px 0;
+        color: #c9ccd6;
+        font-size: 13px;
+        white-space: nowrap;
+    }
+
+    /* Popovers become sheets along the bottom of the screen, over a dimmed
+       backdrop that closes them */
+    .popover-backdrop,
+    .toolbar-popover-backdrop,
+    .sheet-backdrop {
+        position: fixed;
+        inset: 0;
+        height: auto;
+        z-index: 20;
+        background: rgba(0, 0, 0, 0.5);
+    }
+
+    .tempo-popover,
+    .output-popover,
+    .metronome-popover,
+    .practice-panel.open {
+        position: fixed;
+        left: 0;
+        right: 0;
+        top: auto;
+        bottom: 0;
+        z-index: 21;
+        width: auto;
+        max-height: 85dvh;
+        overflow-y: auto;
+        padding: 26px 20px calc(20px + env(safe-area-inset-bottom));
+        gap: 18px;
+        border: none;
+        border-top: 1px solid var(--border);
+        border-radius: 20px 20px 0 0;
+        box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.4);
+    }
+
+    /* The grabber, as on any sheet */
+    .tempo-popover::before,
+    .output-popover::before,
+    .metronome-popover::before,
+    .practice-panel.open::before {
+        content: "";
+        position: absolute;
+        top: 8px;
+        left: 50%;
+        width: 36px;
+        height: 5px;
+        border-radius: 3px;
+        background: #4a4f5e;
+        transform: translateX(-50%);
+    }
+
+    /* Touch-sized sliders */
+    .tempo-popover input[type="range"],
+    .output-popover input[type="range"],
+    .metronome-popover input[type="range"],
+    .practice-panel input[type="range"] {
+        width: 100%;
+    }
+
+    .practice-panel {
+        display: none;
+    }
+
+    .practice-panel.open {
+        display: flex;
+        flex-direction: column;
+        background: var(--surface);
+    }
+
+    .practice-stage {
+        padding: 16px 20px 20px;
+    }
+
+    .practice .beat-circle {
+        width: 64px;
+        height: 64px;
+        font-size: 18px;
+    }
+
+    .bpm-value {
+        font-size: 72px;
+    }
+
+    .practice .bpm-step {
+        width: 56px;
+        height: 56px;
+    }
+}
+
+/* On iOS the page fits between the notch and the home indicator, with the
+   page's colour showing beyond it */
+@supports (-webkit-touch-callout: none) {
+    html {
+        background-color: #0f1116;
+    }
+
+    html,
+    body {
+        overflow: hidden;
+    }
+
+    #main {
+        height: 100dvh;
+    }
+}
+
+/* A tap leaves the pointer "over" what was tapped, so on a touch screen hover
+   tints would stick */
+@media (hover: none) {
+    .toolbar button:hover,
+    .playback-bar button:hover:not(:disabled) {
+        background: transparent;
     }
 }

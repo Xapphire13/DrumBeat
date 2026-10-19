@@ -25,3 +25,13 @@ identifier = "com.xapphire13.drumbeat"
 publisher = "Xapphire13"
 # Generated from assets/icon.svg by scripts/build-icon.sh
 icon = ["assets/icon.png"]
+
+# Keeps the drums and click playing with the screen locked, and lets iOS
+# create the virtual MIDI port
+[background]
+audio = true
+
+# Shows DrumBeat's own folder in the Files app, so scores can be dropped in
+[ios.plist]
+UIFileSharingEnabled = true
+LSSupportsOpeningDocumentsInPlace = true

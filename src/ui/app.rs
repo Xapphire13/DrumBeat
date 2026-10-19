@@ -1,22 +1,27 @@
 #![warn(clippy::pedantic)]
 
 use dioxus::prelude::*;
-use lucide_dioxus::{FolderOpen, Metronome, ZoomIn, ZoomOut};
+use lucide_dioxus::{
+    Ellipsis, FolderOpen, Metronome, SkipBack, SkipForward, SlidersHorizontal, X, ZoomIn, ZoomOut,
+};
 
-use crate::ui::{
-    keyboard_shortcuts::use_keyboard_shortcuts,
-    metronome_control::MetronomeControl,
-    playback_bar::format_time,
-    practice_tool::PracticeTool,
-    providers::{
-        loop_editor::use_loop_editor_provider,
-        playback_manager::{use_playback_manager, use_playback_manager_provider},
-        practice::{use_practice, use_practice_provider},
-        score_manager::{load_score, use_score_manager, use_score_manager_provider},
-        view::{View, use_view, use_view_provider},
-        zoom::{use_zoom, use_zoom_provider},
+use crate::{
+    platform,
+    ui::{
+        keyboard_shortcuts::use_keyboard_shortcuts,
+        metronome_control::MetronomeControl,
+        playback_bar::format_time,
+        practice_tool::{PracticeTool, use_settings_sheet, use_settings_sheet_provider},
+        providers::{
+            loop_editor::use_loop_editor_provider,
+            playback_manager::{use_playback_manager, use_playback_manager_provider},
+            practice::{use_practice, use_practice_provider},
+            score_manager::{load_score, use_score_manager, use_score_manager_provider},
+            view::{View, use_view, use_view_provider},
+            zoom::{use_zoom, use_zoom_provider},
+        },
+        score::Score,
     },
-    score::Score,
 };
 
 const MAIN_CSS: Asset = asset!("/assets/main.css");
@@ -28,6 +33,7 @@ pub fn App() -> Element {
     use_score_manager_provider();
     use_zoom_provider();
     use_practice_provider();
+    use_settings_sheet_provider();
     let view = use_view_provider();
     use_keyboard_shortcuts();
 
@@ -54,11 +60,8 @@ fn Toolbar() -> Element {
     let mut error = use_signal(|| None::<String>);
     let view = use_view();
 
-    let handle_open = move |_: MouseEvent| {
-        let Some(path) = rfd::FileDialog::new()
-            .add_filter("Guitar Pro 8", &["gp"])
-            .pick_file()
-        else {
+    let handle_open = move |_: MouseEvent| async move {
+        let Some(path) = platform::pick_score().await else {
             return;
         };
 
@@ -88,12 +91,18 @@ fn Toolbar() -> Element {
             match view() {
                 View::Score => rsx! {
                     div { class: "toolbar-end",
-                        MetronomeControl {}
+                        div { class: "regular-only",
+                            MetronomeControl {}
+                        }
                         ZoomControls {}
+                        MoreMenu {}
                     }
                 },
                 View::Metronome => rsx! {
-                    PracticeTimer {}
+                    div { class: "toolbar-end",
+                        PracticeTimer {}
+                        SettingsButton {}
+                    }
                 },
             }
         }
@@ -188,6 +197,102 @@ fn ZoomControls() -> Element {
                 onclick: move |_| zoom.zoom_in(),
                 ZoomIn { size: 16 }
             }
+        }
+    }
+}
+
+/// On a phone, where the toolbar has no room for the zoom controls or a
+/// keyboard for the shortcuts: zoom, jumps to either end, and ending the loop
+#[component]
+fn MoreMenu() -> Element {
+    let mut open = use_signal(|| false);
+    let mut zoom = use_zoom();
+    let mut playback_manager = use_playback_manager();
+    let score = use_score_manager();
+    let has_loop = playback_manager.loop_range().is_some();
+
+    rsx! {
+        div { class: "more-menu compact-only",
+            button {
+                class: "more-button",
+                aria_label: "More",
+                aria_haspopup: "menu",
+                aria_expanded: open(),
+                onclick: move |_| open.toggle(),
+                Ellipsis { size: 20 }
+            }
+            if open() {
+                div {
+                    class: "toolbar-popover-backdrop",
+                    onclick: move |_| open.set(false),
+                }
+                div { class: "more-popover", role: "menu",
+                    div { class: "more-zoom",
+                        button {
+                            aria_label: "Zoom out",
+                            disabled: !zoom.can_zoom_out(),
+                            onclick: move |_| zoom.zoom_out(),
+                            ZoomOut { size: 18 }
+                        }
+                        button { onclick: move |_| zoom.reset(),
+                            span { class: "more-zoom-percent", "{zoom.percent()}%" }
+                            span { class: "more-zoom-label", "Zoom" }
+                        }
+                        button {
+                            aria_label: "Zoom in",
+                            disabled: !zoom.can_zoom_in(),
+                            onclick: move |_| zoom.zoom_in(),
+                            ZoomIn { size: 18 }
+                        }
+                    }
+                    button {
+                        class: "more-item",
+                        role: "menuitem",
+                        onclick: move |_| {
+                            playback_manager.skip_to_start(&score.peek());
+                            open.set(false);
+                        },
+                        "Go to start"
+                        SkipBack { size: 18 }
+                    }
+                    button {
+                        class: "more-item",
+                        role: "menuitem",
+                        onclick: move |_| {
+                            playback_manager.skip_to_end(&score.peek());
+                            open.set(false);
+                        },
+                        "Go to end"
+                        SkipForward { size: 18 }
+                    }
+                    button {
+                        class: "more-item danger",
+                        role: "menuitem",
+                        disabled: !has_loop,
+                        onclick: move |_| {
+                            playback_manager.clear_loop();
+                            open.set(false);
+                        },
+                        "Clear loop"
+                        X { size: 18 }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Opens the metronome's settings as a sheet, on a phone
+#[component]
+fn SettingsButton() -> Element {
+    let mut open = use_settings_sheet();
+
+    rsx! {
+        button {
+            class: "more-button compact-only",
+            aria_label: "Metronome settings",
+            onclick: move |_| open.set(true),
+            SlidersHorizontal { size: 20 }
         }
     }
 }

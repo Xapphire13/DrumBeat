@@ -1,7 +1,18 @@
 use std::rc::Rc;
 
 use dioxus::{hooks::use_root_context, prelude::use_hook};
+#[cfg(target_os = "macos")]
 use trackpad_haptic::FeedbackManager;
+
+/// Stands in for the trackpad's feedback where there's no trackpad to tap
+#[cfg(not(target_os = "macos"))]
+#[derive(Default)]
+pub struct FeedbackManager;
+
+#[cfg(not(target_os = "macos"))]
+impl FeedbackManager {
+    fn trigger(&self) {}
+}
 
 #[derive(Clone)]
 pub struct Haptic {

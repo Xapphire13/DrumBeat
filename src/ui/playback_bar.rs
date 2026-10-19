@@ -13,7 +13,7 @@ use crate::{
         playback_manager::use_playback_manager,
         score_manager::use_score_manager,
     },
-    ui::volume_control::VolumeControl,
+    ui::{metronome_control::MetronomeControl, volume_control::VolumeControl},
 };
 
 /// The range of the speed slider. Typing a BPM can go beyond it
@@ -250,6 +250,11 @@ pub fn PlaybackBar() -> Element {
                 }
 
                 div { class: "playback-settings",
+                    // A phone's toolbar has no room for the click, so it
+                    // joins the playback controls
+                    div { class: "compact-only",
+                        MetronomeControl {}
+                    }
                     VolumeControl {}
 
                     div { class: "tempo-control",

@@ -9,6 +9,7 @@ use crate::{
         position::Position,
         score::{Hairpin, HairpinKind},
     },
+    platform,
     ui::{
         hooks::{MousePositionData, use_mouse_position},
         providers::{
@@ -191,8 +192,9 @@ pub fn Staff(dimensions: StaffDimensions, layout: StaffLayout) -> Element {
     let loop_geometry = shown_loop
         .map(|range| LoopGeometry::new(range, &score.read().performance, &measures, &scales()));
     // The tabs for dragging the loop's ends stay out of the way unless the
-    // pointer is over the score
-    let show_tabs = loop_editor.is_hovering_score() || loop_editor.is_dragging();
+    // pointer is over the score. Without hover they always show
+    let show_tabs =
+        !platform::HAS_HOVER || loop_editor.is_hovering_score() || loop_editor.is_dragging();
     let loop_tabs = shown_loop
         .zip(loop_geometry.clone())
         .filter(|_| show_tabs)

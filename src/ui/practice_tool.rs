@@ -5,6 +5,7 @@ use lucide_dioxus::{Minus, Play, Plus, Square};
 
 use crate::{
     audio::{BeatKind, ClickPosition, ClickSound, SILENT_BAR_EVERY, Subdivision},
+    platform,
     ui::{
         controls::{SegmentOption, Segmented, Switch},
         providers::practice::{MAX_BPM, MIN_BPM, Meter, use_practice},
@@ -33,6 +34,19 @@ const HOLD_STEP: u32 = 5;
 
 /// How long − or + is held before each step
 const HOLD_INTERVAL: Duration = Duration::from_millis(400);
+
+/// Whether the metronome's settings are up as a sheet. On a phone there's no
+/// room for them beside the stage, so the toolbar opens them over it
+#[derive(Clone, Copy)]
+struct SettingsSheet(Signal<bool>);
+
+pub fn use_settings_sheet_provider() {
+    use_context_provider(|| SettingsSheet(Signal::new(false)));
+}
+
+pub fn use_settings_sheet() -> Signal<bool> {
+    use_context::<SettingsSheet>().0
+}
 
 /// The standalone metronome: the beat and tempo on a stage, with its
 /// settings in a panel beside it
@@ -74,7 +88,10 @@ fn Stage() -> Element {
     let caption = match click {
         Some(_) if silent_bar => "Silent bar · keep time".to_string(),
         Some(click) => format!("Bar {}", click.bar),
-        None => "Click a beat to accent it, play it normally or silence it".to_string(),
+        None if platform::HAS_HOVER => {
+            "Click a beat to accent it, play it normally or silence it".to_string()
+        }
+        None => "Tap a beat to accent it, play it normally or silence it".to_string(),
     };
 
     // The stage flashes as an accented first beat is heard
@@ -88,89 +105,95 @@ fn Stage() -> Element {
     rsx! {
         div { class: "practice-stage",
             div { class: if flash { "stage-flash on" } else { "stage-flash" } }
-            div { class: "beat-row",
-                for (beat , & kind) in options.beats.iter().enumerate() {
-                    button {
-                        key: "beat-{beat}",
-                        class: beat_class(kind, beat, click),
-                        title: match kind {
-                            BeatKind::Accent => "Accented. Click to play it normally",
-                            BeatKind::Normal => "Played normally. Click to silence it",
-                            BeatKind::Silent => "Silent. Click to accent it",
-                        },
-                        onclick: move |_| practice.cycle_beat(beat),
-                        "{beat + 1}"
-                    }
-                    for sub in 1..per_beat {
-                        span {
-                            key: "sub-{beat}-{sub}",
-                            class: if click.is_some_and(|c| c.beat as usize == beat && c.sub == sub) { "sub-dot lit" } else { "sub-dot" },
+            // Takes all the room the controls below leave, with the beats
+            // centred in it
+            div { class: "beat-area",
+                div { class: "beat-row",
+                    for (beat , & kind) in options.beats.iter().enumerate() {
+                        button {
+                            key: "beat-{beat}",
+                            class: beat_class(kind, beat, click),
+                            title: match kind {
+                                BeatKind::Accent => "Accented. Click to play it normally",
+                                BeatKind::Normal => "Played normally. Click to silence it",
+                                BeatKind::Silent => "Silent. Click to accent it",
+                            },
+                            onclick: move |_| practice.cycle_beat(beat),
+                            "{beat + 1}"
                         }
-                    }
-                }
-            }
-            p { class: "stage-caption", "{caption}" }
-
-            div { class: "bpm-row",
-                StepButton { faster: false, disabled: bpm <= MIN_BPM }
-                div { class: "bpm-readout",
-                    span { class: "bpm-value", "{bpm}" }
-                    span { class: "control-label", "BPM" }
-                }
-                StepButton { faster: true, disabled: bpm >= MAX_BPM }
-            }
-            label { class: "labelled-slider practice-bpm-slider",
-                span { class: "slider-labels",
-                    span { class: "control-label", "Tempo" }
-                    span { "{MIN_BPM}–{MAX_BPM}" }
-                }
-                input {
-                    r#type: "range",
-                    style: "--fill: {slider_fill}%",
-                    min: MIN_BPM,
-                    max: MAX_BPM,
-                    step: SLIDER_STEP,
-                    value: bpm,
-                    oninput: move |event: FormEvent| {
-                        if let Ok(bpm) = event.value().parse::<u32>() {
-                            practice.set_bpm(bpm);
-                        }
-                    },
-                }
-            }
-            div { class: "stage-actions",
-                button {
-                    class: "tap-button",
-                    title: "Tap the tempo",
-                    onmousedown: handle_tap,
-                    "TAP"
-                }
-                button {
-                    class: if running { "start-button running" } else { "start-button" },
-                    title: if running { "Stop (Space)" } else { "Start (Space)" },
-                    aria_label: if running { "Stop" } else { "Start" },
-                    onclick: move |_| practice.toggle(),
-                    if running {
-                        Square { size: 26, fill: "currentColor" }
-                    } else {
-                        Play { size: 28, fill: "currentColor" }
-                    }
-                }
-                div { class: "trainer-slot",
-                    if options.trainer_on {
-                        span { class: "trainer-pill",
-                            "Trainer"
-                            // Drawn, as the text's middle dot sits below its
-                            // middle
-                            span { class: "pill-separator", "aria-hidden": "true" }
-                            if f64::from(bpm) >= options.trainer.up_to_bpm {
-                                "at {options.trainer.up_to_bpm} BPM"
-                            } else {
-                                "{bpm} → {options.trainer.up_to_bpm} BPM"
+                        for sub in 1..per_beat {
+                            span {
+                                key: "sub-{beat}-{sub}",
+                                class: if click.is_some_and(|c| c.beat as usize == beat && c.sub == sub) { "sub-dot lit" } else { "sub-dot" },
                             }
                         }
                     }
                 }
+                p { class: "stage-caption", "{caption}" }
+            }
+
+            div { class: "stage-controls",
+                div { class: "bpm-row",
+                    StepButton { faster: false, disabled: bpm <= MIN_BPM }
+                    div { class: "bpm-readout",
+                        span { class: "bpm-value", "{bpm}" }
+                        span { class: "control-label", "BPM" }
+                    }
+                    StepButton { faster: true, disabled: bpm >= MAX_BPM }
+                }
+                label { class: "labelled-slider practice-bpm-slider",
+                    span { class: "slider-labels",
+                        span { class: "control-label", "Tempo" }
+                        span { "{MIN_BPM}–{MAX_BPM}" }
+                    }
+                    input {
+                        r#type: "range",
+                        style: "--fill: {slider_fill}%",
+                        min: MIN_BPM,
+                        max: MAX_BPM,
+                        step: SLIDER_STEP,
+                        value: bpm,
+                        oninput: move |event: FormEvent| {
+                            if let Ok(bpm) = event.value().parse::<u32>() {
+                                practice.set_bpm(bpm);
+                            }
+                        },
+                    }
+                }
+                div { class: "stage-actions",
+                    button {
+                        class: "tap-button",
+                        title: "Tap the tempo",
+                        onmousedown: handle_tap,
+                        "TAP"
+                    }
+                    button {
+                        class: if running { "start-button running" } else { "start-button" },
+                        title: if running { "Stop (Space)" } else { "Start (Space)" },
+                        aria_label: if running { "Stop" } else { "Start" },
+                        onclick: move |_| practice.toggle(),
+                        if running {
+                            Square { size: 26, fill: "currentColor" }
+                        } else {
+                            Play { size: 28, fill: "currentColor" }
+                        }
+                    }
+                    div { class: "trainer-slot",
+                        if options.trainer_on {
+                            span { class: "trainer-pill",
+                                "Trainer"
+                                // Drawn, as the text's middle dot sits below its
+                                // middle
+                                span { class: "pill-separator", "aria-hidden": "true" }
+                                if f64::from(bpm) >= options.trainer.up_to_bpm {
+                                    "at {options.trainer.up_to_bpm} BPM"
+                                } else {
+                                    "{bpm} → {options.trainer.up_to_bpm} BPM"
+                                }
+                            }
+                        }
+                    }
+            }
             }
         }
     }
@@ -246,9 +269,24 @@ fn SidePanel() -> Element {
     let mut practice = use_practice();
     let options = practice.options();
     let trainer = options.trainer;
+    let mut sheet_open = use_settings_sheet();
 
     rsx! {
-        aside { class: "practice-panel",
+        if sheet_open() {
+            div {
+                class: "sheet-backdrop compact-only",
+                onclick: move |_| sheet_open.set(false),
+            }
+        }
+        aside { class: if sheet_open() { "practice-panel open" } else { "practice-panel" },
+            div { class: "sheet-header compact-only",
+                h2 { "Metronome settings" }
+                button {
+                    class: "sheet-done",
+                    onclick: move |_| sheet_open.set(false),
+                    "Done"
+                }
+            }
             section { class: "panel-section",
                 h2 { class: "control-label", "Time signature" }
                 Segmented {

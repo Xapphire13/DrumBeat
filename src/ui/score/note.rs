@@ -1,9 +1,12 @@
 use dioxus::prelude::*;
 
-use crate::data::{
-    drum_voice::{DrumVoice, NoteHead},
-    note::NoteValue,
-    position::Position,
+use crate::{
+    data::{
+        drum_voice::{DrumVoice, NoteHead},
+        note::NoteValue,
+        position::Position,
+    },
+    platform,
 };
 
 use super::measure_scale::MeasureScale;
@@ -74,7 +77,7 @@ pub fn Note(
     rsx! {
         g {
             onmouseenter: move |_| {
-                if let Some(mut hovered) = hovered {
+                if let Some(mut hovered) = hovered.filter(|_| platform::HAS_HOVER) {
                     hovered.set(Some(HoveredNote {
                         label: label.clone(),
                         x,

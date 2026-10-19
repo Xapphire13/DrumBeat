@@ -163,6 +163,13 @@ pub fn VolumeControl() -> Element {
                 aria_haspopup: "dialog",
                 aria_expanded: open(),
                 onclick: handle_toggle_menu,
+                span { class: "output-menu-label compact-only",
+                    if is_midi {
+                        "MIDI"
+                    } else {
+                        "Built-in"
+                    }
+                }
                 ChevronUp { size: 14, class: "popover-chevron" }
             }
             if open() {
@@ -301,6 +308,23 @@ pub fn VolumeControl() -> Element {
                             "Set the volume there; mute here stops sending notes."
                         }
                     } else {
+                        // On a phone the bar has no room for the volume slider,
+                        // so it's here instead
+                        label { class: "labelled-slider compact-only",
+                            span { class: "slider-labels",
+                                span { class: "control-label", "Volume" }
+                                span { "{volume_percent}%" }
+                            }
+                            input {
+                                r#type: "range",
+                                style: "--fill: {volume_percent}%",
+                                min: 0,
+                                max: 100,
+                                step: 1,
+                                value: volume_percent,
+                                oninput: handle_volume_input,
+                            }
+                        }
                         p { class: "hint",
                             "Synthesized drums played by DrumBeat. Volume and mute apply."
                         }
