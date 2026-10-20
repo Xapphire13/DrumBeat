@@ -411,49 +411,81 @@ impl PlaybackManager {
         state.performance_timestamp = 0;
     }
 
-    /// Move the playhead by whole measures, in the order they are played
+    /// Move the playhead by whole measures, in the order they are played.
+    /// While looping, it stays within the loop
     pub fn skip_measures(&mut self, delta: isize, score: &Score) {
         let performance = &score.performance;
         let current = performance.played_measure_index(self.state.peek().performance_timestamp);
         let target = current
             .saturating_add_signed(delta)
             .min(performance.measures().len().saturating_sub(1));
-        if let Some(played) = performance.measures().get(target) {
-            self.seek(played.timestamp, score);
-        }
+        let Some(played) = performance.measures().get(target) else {
+            return;
+        };
+        let timestamp = match self.state.peek().loop_range {
+            // Back past the loop's start goes to its start, and forward past
+            // its end goes nowhere
+            Some(range) if played.timestamp < range.start => range.start,
+            Some(range) if played.timestamp >= range.end => return,
+            _ => played.timestamp,
+        };
+        self.seek(timestamp, score);
     }
 
+    /// Move the playhead to the start of the score, or of the loop
     pub fn skip_to_start(&mut self, score: &Score) {
-        self.seek(0, score);
+        let start = self.state.peek().loop_range.map_or(0, |range| range.start);
+        self.seek(start, score);
     }
 
-    /// Move the playhead to the start of the last measure played
+    /// Move the playhead to the start of the last measure played, or of the
+    /// loop's last measure
     pub fn skip_to_end(&mut self, score: &Score) {
-        if let Some(last) = score.performance.measures().last() {
-            self.seek(last.timestamp, score);
+        let measures = score.performance.measures();
+        let timestamp = match self.state.peek().loop_range {
+            Some(range) => measures
+                .iter()
+                .rev()
+                .map(|played| played.timestamp)
+                .find(|&timestamp| timestamp < range.end)
+                .map(|timestamp| timestamp.max(range.start)),
+            None => measures.last().map(|played| played.timestamp),
+        };
+        if let Some(timestamp) = timestamp {
+            self.seek(timestamp, score);
         }
     }
 
+    /// Move the playhead to the next note, staying within the loop
     pub fn skip_to_next_note(&mut self, score: &Score) {
-        let playhead = self.state.peek().performance_timestamp;
+        let (playhead, loop_range) = {
+            let state = self.state.peek();
+            (state.performance_timestamp, state.loop_range)
+        };
         if let Some(next_timestamp) = score
             .performance
             .note_timestamps(&score.measures)
             .into_iter()
             .find(|&ts| ts > playhead)
+            .filter(|&ts| loop_range.is_none_or(|range| range.contains(ts)))
         {
             self.seek(next_timestamp, score);
         }
     }
 
+    /// Move the playhead to the previous note, staying within the loop
     pub fn skip_to_previous_note(&mut self, score: &Score) {
-        let playhead = self.state.peek().performance_timestamp;
+        let (playhead, loop_range) = {
+            let state = self.state.peek();
+            (state.performance_timestamp, state.loop_range)
+        };
         if let Some(prev_timestamp) = score
             .performance
             .note_timestamps(&score.measures)
             .into_iter()
             .rev()
             .find(|&ts| ts < playhead)
+            .filter(|&ts| loop_range.is_none_or(|range| range.contains(ts)))
         {
             self.seek(prev_timestamp, score);
         }

@@ -72,6 +72,9 @@ fn Toolbar() -> Element {
             Ok(new_score) => {
                 playback_manager.reset();
                 score.set(new_score);
+                // A new score is read from the top, not from wherever the
+                // last one was scrolled to
+                document::eval("document.querySelector('.staves')?.scrollTo(0, 0)");
                 error.set(None);
             }
             Err(e) => error.set(Some(format!("Couldn't open {}: {e}", path.display()))),
