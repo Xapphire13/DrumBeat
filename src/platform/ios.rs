@@ -11,7 +11,7 @@ use block2::RcBlock;
 
 use objc2::{
     DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send,
-    rc::Retained,
+    rc::{Allocated, Retained},
     runtime::{AnyClass, ProtocolObject},
 };
 use objc2_avf_audio::{AVAudioSession, AVAudioSessionCategoryPlayback};
@@ -111,6 +111,39 @@ fn top_view_controller(mtm: MainThreadMarker) -> Option<Retained<UIViewControlle
         top = presented;
     }
     Some(top)
+}
+
+// For the Bluetooth MIDI pairing screen
+#[link(name = "CoreAudioKit", kind = "framework")]
+unsafe extern "C" {}
+
+/// Shows iOS's Bluetooth MIDI screen, in a navigation bar so it has a
+/// title, as a sheet that's swiped away when done. Paired devices then show
+/// up as MIDI inputs
+pub fn pair_bluetooth_midi() {
+    let Some(mtm) = MainThreadMarker::new() else {
+        return;
+    };
+    let (Some(presenter), Some(central_class), Some(navigation_class)) = (
+        top_view_controller(mtm),
+        AnyClass::get(c"CABTMIDICentralViewController"),
+        AnyClass::get(c"UINavigationController"),
+    ) else {
+        return;
+    };
+    unsafe {
+        let central: Option<Retained<UIViewController>> = msg_send![central_class, new];
+        let Some(central) = central else {
+            return;
+        };
+        central.setTitle(Some(&NSString::from_str("Bluetooth MIDI")));
+        let navigation: Allocated<UIViewController> = msg_send![navigation_class, alloc];
+        let navigation: Option<Retained<UIViewController>> =
+            msg_send![navigation, initWithRootViewController: &*central];
+        if let Some(navigation) = navigation {
+            presenter.presentViewController_animated_completion(&navigation, true, None);
+        }
+    }
 }
 
 pub fn prepare_audio() {

@@ -25,6 +25,17 @@ pub async fn pick_score() -> Option<PathBuf> {
     }
 }
 
+/// Whether the system offers a screen for pairing Bluetooth MIDI devices,
+/// which then show up as inputs. On a Mac that's in Audio MIDI Setup instead
+pub const CAN_PAIR_BLUETOOTH_MIDI: bool = cfg!(target_os = "ios");
+
+/// Shows the system's screen for pairing Bluetooth MIDI devices, e.g. a
+/// wireless drum kit
+pub fn pair_bluetooth_midi() {
+    #[cfg(target_os = "ios")]
+    ios::pair_bluetooth_midi();
+}
+
 /// Sets the app up to play sound. On iOS that means asking to be heard with
 /// the ring switch on silent, as an instrument's practice tool should be
 pub fn prepare_audio() {

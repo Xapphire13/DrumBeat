@@ -10,10 +10,12 @@ use crate::{
     ui::{
         keyboard_shortcuts::use_keyboard_shortcuts,
         metronome_control::MetronomeControl,
+        midi_input_control::MidiInputControl,
         playback_bar::format_time,
         practice_tool::{PracticeTool, use_settings_sheet, use_settings_sheet_provider},
         providers::{
             loop_editor::use_loop_editor_provider,
+            midi_input::use_midi_input_provider,
             playback_manager::{use_playback_manager, use_playback_manager_provider},
             practice::{use_practice, use_practice_provider},
             score_manager::{load_score, use_score_manager, use_score_manager_provider},
@@ -33,6 +35,7 @@ pub fn App() -> Element {
     use_score_manager_provider();
     use_zoom_provider();
     use_practice_provider();
+    use_midi_input_provider();
     use_settings_sheet_provider();
     let view = use_view_provider();
     use_keyboard_shortcuts();
@@ -97,6 +100,7 @@ fn Toolbar() -> Element {
             match view() {
                 View::Score => rsx! {
                     div { class: "toolbar-end",
+                        MidiInputControl {}
                         div { class: "regular-only",
                             MetronomeControl {}
                         }
@@ -107,6 +111,7 @@ fn Toolbar() -> Element {
                 View::Metronome => rsx! {
                     div { class: "toolbar-end",
                         PracticeTimer {}
+                        MidiInputControl {}
                         SettingsButton {}
                     }
                 },

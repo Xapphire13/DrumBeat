@@ -11,7 +11,7 @@ cpal = "0.18.2"
 dioxus = { version = "0.7.9", features = [] }
 dioxus-desktop = "0.7.9"
 dirs = "7.0.0"
-lucide-dioxus = { version = "3.58.0", features = ["account", "arrows", "files", "layout", "math", "multimedia", "transportation"] }
+lucide-dioxus = { version = "3.58.0", features = ["account", "arrows", "connectivity", "files", "layout", "math", "multimedia", "transportation"] }
 midir = "0.11"
 quick-xml = { version = "0.37", features = ["serialize"] }
 serde = { version = "1", features = ["derive"] }

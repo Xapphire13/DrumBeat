@@ -24,6 +24,14 @@ const SAVE_DELAY: Duration = Duration::from_millis(500);
 #[serde(default)]
 pub struct Settings {
     pub audio: AudioSettings,
+    pub midi_input: MidiInputSettings,
+}
+
+#[derive(Clone, PartialEq, Debug, Default, Deserialize)]
+#[serde(default)]
+pub struct MidiInputSettings {
+    /// The input listened to, usually the drum kit. Empty for none
+    pub port: String,
 }
 
 #[derive(Clone, PartialEq, Debug, Deserialize)]
@@ -141,6 +149,23 @@ fn update_audio(document: &mut DocumentMut, audio: &AudioSettings) {
     set(table, "muted", audio.muted.into());
 }
 
+/// Save the MIDI input settings, a moment after they stop changing
+pub fn save_midi_input(midi_input: &MidiInputSettings) {
+    let mut document = document().lock().unwrap_or_else(|e| e.into_inner());
+    update_midi_input(&mut document, midi_input);
+    schedule_write(document.to_string());
+}
+
+fn update_midi_input(document: &mut DocumentMut, midi_input: &MidiInputSettings) {
+    let table = document
+        .entry("midi_input")
+        .or_insert_with(|| Item::Table(Table::new()));
+    let Some(table) = table.as_table_like_mut() else {
+        return;
+    };
+    set(table, "port", midi_input.port.as_str().into());
+}
+
 /// Set `key` to `value`, keeping any comment on its line
 fn set(table: &mut dyn toml_edit::TableLike, key: &str, value: Value) {
     match table.get_mut(key) {
@@ -229,5 +254,21 @@ mod tests {
         assert!(text.contains("output = \"midi\" # or midi\n"), "{text}");
         assert!(text.contains("volume = 0.8\n"), "{text}");
         assert_eq!(parse(&text.parse().unwrap()).audio, audio);
+    }
+
+    #[test]
+    fn saves_the_midi_input_beside_audio() {
+        let mut document: DocumentMut = "[audio]\nvolume = 1.0\n".parse().unwrap();
+        assert_eq!(parse(&document).midi_input.port, "");
+        let midi_input = MidiInputSettings {
+            port: "Alesis Nitro Max".to_string(),
+        };
+        update_midi_input(&mut document, &midi_input);
+        let text = document.to_string();
+        assert!(
+            text.ends_with("[midi_input]\nport = \"Alesis Nitro Max\"\n"),
+            "{text}"
+        );
+        assert_eq!(parse(&text.parse().unwrap()).midi_input, midi_input);
     }
 }

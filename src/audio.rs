@@ -19,6 +19,7 @@ use cpal::{
 mod click;
 mod hits;
 pub mod midi;
+pub mod midi_in;
 mod practice;
 mod voice;
 

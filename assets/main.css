@@ -594,7 +594,7 @@ body {
     justify-content: space-between;
 }
 
-.playback-bar .small-button {
+:is(.toolbar, .playback-bar) .small-button {
     gap: 4px;
     height: 22px;
     padding: 0 6px;
@@ -613,7 +613,7 @@ body {
     background: #0f1116;
 }
 
-.playback-bar .port {
+:is(.toolbar, .playback-bar) .port {
     flex-shrink: 0;
     justify-content: flex-start;
     gap: 8px;
@@ -627,7 +627,7 @@ body {
     border-top: 1px solid var(--border);
 }
 
-.playback-bar .port.selected {
+:is(.toolbar, .playback-bar) .port.selected {
     background: #262a35;
     color: #f4f5f7;
 }
@@ -718,14 +718,14 @@ body {
     cursor: default;
 }
 
-.output-popover .hint {
+:is(.output-popover, .input-popover) .hint {
     margin: 0;
     font-size: 12px;
     line-height: 1.45;
     color: var(--muted);
 }
 
-.output-popover .hint b {
+:is(.output-popover, .input-popover) .hint b {
     font-weight: 600;
     color: #c9ccd6;
 }
@@ -1564,6 +1564,10 @@ button.switch:focus-visible {
 }
 
 /* Each menu button is lit subtly while its popover is open */
+.toolbar .input-chip[aria-expanded="true"] {
+    background: #1d2029;
+}
+
 :is(.toolbar, .playback-bar) .click-menu[aria-expanded="true"] {
     background: #1d2029;
 }
@@ -1574,6 +1578,202 @@ button.switch:focus-visible {
 
 @media (prefers-reduced-motion: reduce) {
     .popover-chevron {
+        transition: none;
+    }
+}
+
+/* The MIDI input, usually the drum kit: a chip in the toolbar naming it,
+   whose dot flashes with every hit */
+.midi-input-control {
+    position: relative;
+    flex-shrink: 0;
+}
+
+.toolbar .input-chip {
+    gap: 7px;
+    max-width: 220px;
+    height: 32px;
+    box-sizing: border-box;
+    padding: 0 6px 0 9px;
+    border: 1px solid #343846;
+    border-radius: 8px;
+}
+
+.input-chip-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-family: var(--mono);
+    font-size: 12px;
+    font-weight: 500;
+    color: #f4f5f7;
+}
+
+.input-chip > .popover-chevron {
+    color: var(--muted);
+}
+
+.input-chip.unset .input-chip-name {
+    font-family: inherit;
+    font-weight: 600;
+    color: var(--muted);
+}
+
+.toolbar .input-chip.problem {
+    border-color: rgba(214, 40, 40, 0.55);
+}
+
+.input-chip.problem .input-chip-name {
+    color: #ff8a8a;
+}
+
+/* On a phone, a drum button whose badge carries the same state */
+.input-button {
+    position: relative;
+}
+
+.input-badge {
+    position: absolute;
+    top: 9px;
+    right: 8px;
+    width: 9px;
+    height: 9px;
+    box-sizing: border-box;
+    border: 2px solid #0f1116;
+    border-radius: 50%;
+    background: #4a4f5e;
+    transition: background-color 80ms ease, box-shadow 80ms ease;
+}
+
+.input-badge.ok {
+    background: #3ecf8e;
+}
+
+.input-badge.lit {
+    background: var(--accent);
+    box-shadow: 0 0 6px var(--accent);
+}
+
+.input-badge.problem {
+    background: #d62828;
+}
+
+.input-popover {
+    position: absolute;
+    right: 0;
+    top: calc(100% + 8px);
+    z-index: 4;
+    width: 320px;
+    box-sizing: border-box;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    border-radius: 12px;
+    background: var(--surface);
+    border: 1px solid #343846;
+    box-shadow: 0 12px 32px rgba(15, 17, 22, 0.35);
+    color: #f4f5f7;
+    cursor: default;
+}
+
+.port .activity-dot,
+.port .tag {
+    margin-left: auto;
+}
+
+.port-icon {
+    display: flex;
+    color: var(--accent-text);
+}
+
+.empty-ports {
+    margin: 0;
+    padding: 14px 12px;
+    font-size: 12px;
+    line-height: 1.5;
+    text-align: center;
+    color: var(--muted);
+}
+
+/* The last hit, and a trail of the ones before it */
+.hit-monitor {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.last-hit {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: end;
+    gap: 4px 12px;
+}
+
+.last-hit-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 18px;
+    font-weight: 650;
+    line-height: 1.2;
+}
+
+.last-hit-name.waiting {
+    grid-column: 1 / -1;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--muted);
+}
+
+.last-hit-meta {
+    font: 500 11px var(--mono);
+    color: var(--muted);
+    white-space: nowrap;
+}
+
+.velocity {
+    grid-column: 1 / -1;
+    height: 4px;
+    overflow: hidden;
+    border-radius: 2px;
+    background: #2e323d;
+}
+
+.velocity span {
+    display: block;
+    height: 100%;
+    border-radius: 2px;
+    background: var(--accent);
+}
+
+.hit-trail {
+    display: flex;
+    gap: 4px;
+    height: 20px;
+    overflow: hidden;
+}
+
+.hit-trail span {
+    flex-shrink: 0;
+    height: 20px;
+    box-sizing: border-box;
+    padding: 0 6px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: #0f1116;
+    color: #c9ccd6;
+    font: 500 10px/18px var(--mono);
+    white-space: nowrap;
+}
+
+.hit-trail span:first-child {
+    border-color: rgba(139, 108, 255, 0.6);
+    color: var(--accent-text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .input-badge {
         transition: none;
     }
 }
@@ -1691,6 +1891,15 @@ body .compact-only {
 
     body .more-menu.compact-only {
         display: block;
+    }
+
+    body .input-button.compact-only {
+        display: flex;
+    }
+
+    /* The button outranks .regular-only, so it's hidden here */
+    .toolbar .input-chip {
+        display: none;
     }
 
     body .output-menu-label.compact-only {
@@ -1917,6 +2126,7 @@ body .compact-only {
 
     .tempo-popover,
     .output-popover,
+    .input-popover,
     .metronome-popover,
     .practice-panel.open {
         position: fixed;
@@ -1939,6 +2149,7 @@ body .compact-only {
     /* The grabber, as on any sheet */
     .tempo-popover::before,
     .output-popover::before,
+    .input-popover::before,
     .metronome-popover::before,
     .practice-panel.open::before {
         content: "";
@@ -1950,6 +2161,62 @@ body .compact-only {
         border-radius: 3px;
         background: #4a4f5e;
         transform: translateX(-50%);
+    }
+
+    .input-popover .sheet-done {
+        height: 44px;
+        padding: 0 4px;
+        color: var(--accent-text);
+        font-size: 16px;
+        font-weight: 600;
+    }
+
+    .input-popover .sheet-header h2 {
+        margin: 0;
+        font-size: 20px;
+        font-weight: 700;
+    }
+
+    /* Touch-sized rows */
+    .toolbar .input-popover .port {
+        height: 44px;
+        gap: 12px;
+        padding: 0 14px;
+        font-size: 15px;
+    }
+
+    .input-popover .port .radio {
+        width: 16px;
+        height: 16px;
+    }
+
+    .input-popover .port.selected .radio {
+        border-width: 5px;
+    }
+
+    .input-popover .port-list {
+        max-height: none;
+        border-radius: 12px;
+    }
+
+    .toolbar .input-popover .small-button {
+        height: 32px;
+        padding: 0 10px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        font-size: 13px;
+    }
+
+    .input-popover :is(.popover-subtitle, .hint, .status) {
+        font-size: 13px;
+    }
+
+    .input-popover .last-hit-name {
+        font-size: 22px;
+    }
+
+    .input-popover .popover-divider {
+        margin: 0 -20px;
     }
 
     /* Touch-sized sliders */

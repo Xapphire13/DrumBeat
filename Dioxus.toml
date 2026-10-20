@@ -35,3 +35,5 @@ audio = true
 [ios.plist]
 UIFileSharingEnabled = true
 LSSupportsOpeningDocumentsInPlace = true
+# Shown when pairing a Bluetooth MIDI drum kit
+NSBluetoothAlwaysUsageDescription = "DrumBeat uses Bluetooth to connect to wireless MIDI drum kits."
