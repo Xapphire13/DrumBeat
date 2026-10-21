@@ -110,6 +110,12 @@ pub fn PlaybackBar() -> Element {
         }
     };
 
+    // What's typed in the BPM box, until it's entered. The bar redraws every
+    // frame while playing, and an input's value is rewritten on each, so
+    // without it the box would keep snapping back to the playing BPM
+    let mut bpm_draft = use_signal(|| None::<String>);
+    let bpm_text = bpm_draft().unwrap_or_else(|| bpm.to_string());
+
     // Typing a BPM sets the speed that plays the current tempo at it; any
     // tempo changes in the score scale with it
     let handle_bpm_change = move |event: FormEvent| {
@@ -118,6 +124,7 @@ pub fn PlaybackBar() -> Element {
         {
             playback_manager.set_speed(bpm / score_bpm);
         }
+        bpm_draft.set(None);
     };
 
     let handle_reset_speed = move |_: MouseEvent| playback_manager.set_speed(1.0);
@@ -263,7 +270,11 @@ pub fn PlaybackBar() -> Element {
                             title: "Playback speed, relative to the score's tempo",
                             aria_haspopup: "dialog",
                             aria_expanded: tempo_open(),
-                            onclick: move |_| tempo_open.set(!tempo_open()),
+                            onclick: move |_| {
+                                // A draft left when Escape closed the popover is dropped
+                                bpm_draft.set(None);
+                                tempo_open.set(!tempo_open());
+                            },
                             Gauge { size: 16 }
                             span { class: "tempo-chip-speed", "{speed_percent}%" }
                             span { class: "tempo-chip-bpm", "{bpm} BPM" }
@@ -313,8 +324,10 @@ pub fn PlaybackBar() -> Element {
                                             r#type: "number",
                                             title: "Play at an exact tempo",
                                             min: 1,
-                                            value: bpm,
+                                            value: bpm_text,
+                                            oninput: move |event: FormEvent| bpm_draft.set(Some(event.value())),
                                             onchange: handle_bpm_change,
+                                            onblur: move |_| bpm_draft.set(None),
                                         }
                                         "BPM"
                                     }
