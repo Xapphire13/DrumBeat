@@ -2423,6 +2423,16 @@ body .compact-only {
         background: transparent;
         color: var(--muted);
     }
+
+    /* Outranks the bars' hover resets above, which would hide a switch's
+       track until the tap moved elsewhere */
+    :is(.toolbar, .playback-bar, body) button.switch:hover:not(:disabled) {
+        background: #343846;
+    }
+
+    :is(.toolbar, .playback-bar, body) button.switch.on:hover:not(:disabled) {
+        background: var(--accent);
+    }
 }
 
 /* Switches and checkboxes big enough for a finger */
