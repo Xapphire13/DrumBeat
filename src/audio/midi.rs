@@ -3,6 +3,7 @@
 //! built-in drums, and this thread sends it at that moment
 
 use std::{
+    cell::OnceCell,
     cmp::Reverse,
     collections::BinaryHeap,
     sync::{
@@ -81,9 +82,27 @@ pub fn since_last_sent() -> Option<Duration> {
 /// The ports found by the last `refresh_ports`
 static PORTS: Mutex<Vec<String>> = Mutex::new(vec![]);
 
+/// Start the system's MIDI from the main thread, before any MIDI thread does.
+/// CoreMIDI keeps the process's list of devices up to date through the run
+/// loop of the thread that made its first client, and only the main thread's
+/// run loop is always going. Made anywhere else, the list goes stale, missing
+/// devices plugged in after it was first read
+pub(super) fn start_system_midi() {
+    thread_local! {
+        static CLIENT: OnceCell<Option<MidiOutput>> = const { OnceCell::new() };
+    }
+    if std::thread::current().name() != Some("main") {
+        return;
+    }
+    CLIENT.with(|client| {
+        client.get_or_init(|| MidiOutput::new(VIRTUAL_PORT).ok());
+    });
+}
+
 /// Look for ports again on the MIDI thread, since the system can take a
 /// moment to answer. `ports` has them once it has
 pub fn refresh_ports() {
+    start_system_midi();
     send(Command::RefreshPorts);
 }
 
@@ -111,6 +130,9 @@ fn available_ports() -> Vec<String> {
 
 /// Send notes to the port named `port`, or stop sending with `None`
 pub fn connect(port: Option<String>) {
+    if port.is_some() {
+        start_system_midi();
+    }
     send(Command::Connect(port));
 }
 

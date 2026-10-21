@@ -13,7 +13,7 @@ use std::{
 
 use midir::{MidiInput, MidiInputConnection, MidiInputPort};
 
-use super::midi::VIRTUAL_PORT;
+use super::midi::{VIRTUAL_PORT, start_system_midi};
 
 /// The name DrumBeat goes by as a MIDI client while listening
 const CLIENT_NAME: &str = "DrumBeat input";
@@ -98,11 +98,15 @@ pub fn ports() -> Vec<String> {
 /// Look for inputs again on the MIDI input thread, since the system can take
 /// a moment to answer. `ports` has them once it has
 pub fn refresh_ports() {
+    start_system_midi();
     send(Command::RefreshPorts);
 }
 
 /// Listen to the input named `port`, or stop listening with `None`
 pub fn connect(port: Option<String>) {
+    if port.is_some() {
+        start_system_midi();
+    }
     send(Command::Connect(port));
 }
 
