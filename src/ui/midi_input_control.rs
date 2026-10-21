@@ -226,7 +226,7 @@ pub fn MidiInputControl() -> Element {
                     p { class: "hint",
                         match (&port, status) {
                             (None, _) => "Pick the kit or pad controller you play on.",
-                            (Some(_), Status::Missing) => "Plug it back in and DrumBeat picks it up again.",
+                            (Some(_), Status::Missing) => "Plug it back in to reconnect.",
                             _ => "Notes on any channel are taken.",
                         }
                     }
