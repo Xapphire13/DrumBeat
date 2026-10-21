@@ -1,11 +1,12 @@
 use std::time::{Duration, Instant};
 
 use dioxus::{core::Task, html::input_data::MouseButton, prelude::*};
-use lucide_dioxus::{Minus, Play, Plus, Square};
+use lucide_dioxus::{ChevronUp, Minus, Play, Plus, Square};
 
 use crate::{
     audio::{BeatKind, ClickPosition, ClickSound, SILENT_BAR_EVERY, Subdivision},
     platform,
+    settings::{self, MetronomeViewSettings},
     ui::{
         controls::{SegmentOption, Segmented, Switch},
         providers::practice::{MAX_BPM, MIN_BPM, Meter, use_practice},
@@ -43,12 +44,29 @@ const HOLD_INTERVAL: Duration = Duration::from_millis(400);
 #[derive(Clone, Copy)]
 struct SettingsSheet(Signal<bool>);
 
+/// Whether the metronome's settings panel is shown beside the stage, on a
+/// screen wide enough for it. It's needed only now and then, so it can be
+/// put away, and stays as it was left between launches
+#[derive(Clone, Copy)]
+struct SettingsPanel(Signal<bool>);
+
 pub fn use_settings_sheet_provider() {
     use_context_provider(|| SettingsSheet(Signal::new(false)));
+    let panel =
+        use_context_provider(|| SettingsPanel(Signal::new(settings::load().metronome.panel_open)));
+    use_effect(move || {
+        settings::save_metronome(&MetronomeViewSettings {
+            panel_open: (panel.0)(),
+        });
+    });
 }
 
 pub fn use_settings_sheet() -> Signal<bool> {
     use_context::<SettingsSheet>().0
+}
+
+pub fn use_settings_panel() -> Signal<bool> {
+    use_context::<SettingsPanel>().0
 }
 
 /// The standalone metronome: the beat and tempo on a stage, with its
@@ -132,14 +150,29 @@ fn Stage() -> Element {
                             "{beat + 1}"
                         }
                         for sub in 1..per_beat {
-                            span {
+                            button {
                                 key: "sub-{beat}-{sub}",
-                                class: if click.is_some_and(|c| c.beat as usize == beat && c.sub == sub) { "sub-dot lit" } else { "sub-dot" },
+                                class: sub_class(options.muted_subs, beat, sub, click),
+                                title: if options.muted_subs & (1 << sub) != 0 { "Silent on every beat. Click to play it" } else { "Click to silence it on every beat" },
+                                onclick: move |_| practice.toggle_sub(sub),
                             }
                         }
                     }
                 }
                 p { class: "stage-caption", "{caption}" }
+                if options.trainer_on {
+                    span { class: "trainer-pill",
+                        "Trainer"
+                        // Drawn, as the text's middle dot sits below its
+                        // middle
+                        span { class: "pill-separator", "aria-hidden": "true" }
+                        if f64::from(bpm) >= options.trainer.up_to_bpm {
+                            "at {options.trainer.up_to_bpm} BPM"
+                        } else {
+                            "{bpm} → {options.trainer.up_to_bpm} BPM"
+                        }
+                    }
+                }
             }
 
             div { class: "stage-controls",
@@ -188,22 +221,63 @@ fn Stage() -> Element {
                             Play { size: 28, fill: "currentColor" }
                         }
                     }
-                    div { class: "trainer-slot",
-                        if options.trainer_on {
-                            span { class: "trainer-pill",
-                                "Trainer"
-                                // Drawn, as the text's middle dot sits below its
-                                // middle
-                                span { class: "pill-separator", "aria-hidden": "true" }
-                                if f64::from(bpm) >= options.trainer.up_to_bpm {
-                                    "at {options.trainer.up_to_bpm} BPM"
-                                } else {
-                                    "{bpm} → {options.trainer.up_to_bpm} BPM"
-                                }
-                            }
+                    NoteChip {}
+            }
+            }
+        }
+    }
+}
+
+/// The note clicked on, as a chip beside Start that opens a menu of the
+/// others
+#[component]
+fn NoteChip() -> Element {
+    let mut practice = use_practice();
+    let current = practice.options().subdivision;
+    let mut open = use_signal(|| false);
+
+    rsx! {
+        div { class: "note-control",
+            button {
+                class: "note-chip",
+                title: "The note clicked on",
+                aria_haspopup: "menu",
+                aria_expanded: open(),
+                onclick: move |_| open.toggle(),
+                span { class: "note-chip-label", "Note" }
+                span { class: "note-chip-value", "{current.label()}" }
+                ChevronUp { size: 14, class: "popover-chevron" }
+            }
+            if open() {
+                // Clicking anywhere outside the menu closes it
+                div {
+                    class: "popover-backdrop",
+                    onclick: move |_| open.set(false),
+                }
+                div {
+                    class: "note-popover",
+                    role: "menu",
+                    aria_label: "Note",
+                    onkeydown: move |event: KeyboardEvent| {
+                        if event.key().to_string() == "Escape" {
+                            open.set(false);
+                        }
+                    },
+                    for subdivision in Subdivision::ALL {
+                        button {
+                            key: "{subdivision.label()}",
+                            class: if subdivision == current { "note-option selected" } else { "note-option" },
+                            role: "menuitemradio",
+                            aria_checked: subdivision == current,
+                            onclick: move |_| {
+                                practice.set_subdivision(subdivision);
+                                open.set(false);
+                            },
+                            span { class: "note-option-value", "{subdivision.label()}" }
+                            span { class: "note-option-name", "{subdivision.name()}" }
                         }
                     }
-            }
+                }
             }
         }
     }
@@ -299,6 +373,14 @@ fn SidePanel() -> Element {
     let options = practice.options();
     let trainer = options.trainer;
     let mut sheet_open = use_settings_sheet();
+    let panel_open = use_settings_panel();
+    let mut panel_class = String::from("practice-panel");
+    if panel_open() {
+        panel_class.push_str(" shown");
+    }
+    if sheet_open() {
+        panel_class.push_str(" open");
+    }
 
     rsx! {
         if sheet_open() {
@@ -307,7 +389,7 @@ fn SidePanel() -> Element {
                 onclick: move |_| sheet_open.set(false),
             }
         }
-        aside { class: if sheet_open() { "practice-panel open" } else { "practice-panel" },
+        aside { class: panel_class,
             div { class: "sheet-header compact-only",
                 h2 { "Metronome settings" }
                 button {
@@ -328,14 +410,14 @@ fn SidePanel() -> Element {
                 }
             }
             section { class: "panel-section",
-                h2 { class: "control-label", "Click on" }
+                h2 { class: "control-label", "Count-in" }
                 Segmented {
-                    label: "Click on",
-                    options: Subdivision::ALL
+                    label: "Count-in",
+                    options: COUNT_IN_BARS
                         .iter()
-                        .map(|&sub| SegmentOption::new(sub.label(), options.subdivision == sub))
+                        .map(|&bars| SegmentOption::new(count_in_label(bars), options.count_in_bars == bars))
                         .collect::<Vec<_>>(),
-                    onselect: move |i: usize| practice.update(|o| o.subdivision = Subdivision::ALL[i]),
+                    onselect: move |i: usize| practice.update(|o| o.count_in_bars = COUNT_IN_BARS[i]),
                 }
             }
             section { class: "panel-section",
@@ -386,17 +468,6 @@ fn SidePanel() -> Element {
             }
             section { class: "panel-section",
                 h2 { class: "control-label", "Practice" }
-                div { class: "panel-row",
-                    span { "Count-in" }
-                    Segmented {
-                        label: "Count-in",
-                        options: COUNT_IN_BARS
-                            .iter()
-                            .map(|&bars| SegmentOption::new(count_in_label(bars), options.count_in_bars == bars))
-                            .collect::<Vec<_>>(),
-                        onselect: move |i: usize| practice.update(|o| o.count_in_bars = COUNT_IN_BARS[i]),
-                    }
-                }
                 div { class: "panel-row",
                     div { class: "panel-row-text",
                         span { "Speed trainer" }
@@ -474,6 +545,16 @@ fn NumberField(
                 }
             },
         }
+    }
+}
+
+fn sub_class(muted_subs: u32, beat: usize, sub: u32, click: Option<ClickPosition>) -> &'static str {
+    let lit = click.is_some_and(|c| c.beat as usize == beat && c.sub == sub && !c.count_in);
+    match (muted_subs & (1 << sub) != 0, lit) {
+        (false, false) => "sub-dot",
+        (false, true) => "sub-dot lit",
+        (true, false) => "sub-dot muted",
+        (true, true) => "sub-dot muted lit",
     }
 }
 

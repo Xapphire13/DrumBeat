@@ -74,6 +74,8 @@ pub struct PracticeOptions {
     pub meter: Meter,
     pub beats: Vec<BeatKind>,
     pub subdivision: Subdivision,
+    /// The places between beats left silent, as `PracticeSettings` has them
+    pub muted_subs: u32,
     pub sound_on: bool,
     pub sound: ClickSound,
     /// From 0 to 1
@@ -94,6 +96,7 @@ impl Default for PracticeOptions {
             meter: Meter::FourFour,
             beats: Meter::FourFour.default_beats(),
             subdivision: Subdivision::Quarter,
+            muted_subs: 0,
             sound_on: true,
             sound: ClickSound::Click,
             volume: 0.8,
@@ -117,6 +120,7 @@ impl PracticeOptions {
             bpm: f64::from(self.bpm),
             beats: self.beats.clone(),
             subdivision: self.subdivision,
+            muted_subs: self.muted_subs,
             sound: self.sound_on.then_some(self.sound),
             trainer: self.trainer_on.then_some(self.trainer),
             silent_bars: self.silent_bars,
@@ -223,6 +227,20 @@ impl PracticeMetronome {
             options.meter = meter;
             options.beats = meter.default_beats();
         });
+    }
+
+    /// Click on a new note, with every click between beats heard to start
+    /// with
+    pub fn set_subdivision(&mut self, subdivision: Subdivision) {
+        self.update(|options| {
+            options.subdivision = subdivision;
+            options.muted_subs = 0;
+        });
+    }
+
+    /// Silence or bring back the click at `sub` in every beat
+    pub fn toggle_sub(&mut self, sub: u32) {
+        self.update(|options| options.muted_subs ^= 1 << sub);
     }
 
     /// Step a beat on from accented to played normally to silent, and round

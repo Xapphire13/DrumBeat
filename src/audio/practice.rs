@@ -30,6 +30,9 @@ pub struct PracticeSettings {
     /// How each beat of the bar is played
     pub beats: Vec<BeatKind>,
     pub subdivision: Subdivision,
+    /// The clicks between beats left silent, as a bit for each place in the
+    /// beat, 1 for the first after the beat. Silent ones are still counted
+    pub muted_subs: u32,
     /// `None` with the sound off, for practising by the lights alone
     pub sound: Option<ClickSound>,
     pub trainer: Option<SpeedTrainer>,
@@ -148,6 +151,7 @@ impl Practice {
             (0, BeatKind::Accent) => Some(ClickKind::Accent),
             (0, BeatKind::Normal) => Some(ClickKind::Beat),
             (0, BeatKind::Silent) => None,
+            (sub, _) if self.settings.muted_subs & (1 << sub) != 0 => None,
             _ => Some(ClickKind::Sub),
         };
         PracticeClick {
@@ -228,6 +232,7 @@ mod tests {
             bpm: 60.0,
             beats: vec![BeatKind::Accent, BeatKind::Normal, BeatKind::Silent],
             subdivision: Subdivision::Quarter,
+            muted_subs: 0,
             sound: Some(ClickSound::Click),
             trainer: None,
             silent_bars: false,
@@ -357,5 +362,20 @@ mod tests {
             .map(|(_, c)| (c.position.bar, c.position.beat))
             .collect();
         assert_eq!(bars, [(2, 1), (2, 2), (1, 0), (1, 1)]);
+    }
+
+    #[test]
+    fn leaves_muted_subdivisions_silent() {
+        let mut practice = Practice::new(PracticeSettings {
+            subdivision: Subdivision::Sixteenth,
+            // The "e" and the "a"
+            muted_subs: 0b1010,
+            ..settings()
+        });
+        let heard: Vec<_> = run(&mut practice, 100)
+            .iter()
+            .map(|(_, c)| c.kind.is_some())
+            .collect();
+        assert_eq!(heard, [true, false, true, false]);
     }
 }

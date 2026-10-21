@@ -1301,24 +1301,24 @@ button.switch:focus-visible {
     flex-wrap: wrap;
     justify-content: center;
     gap: 14px;
-    min-height: 66px;
+    min-height: 92px;
 }
 
 .practice .beat-circle {
-    width: 56px;
-    height: 56px;
+    width: 80px;
+    height: 80px;
     box-sizing: border-box;
     border-radius: 50%;
     border: 2px solid #343846;
     background: #161922;
     color: var(--muted);
-    font: 600 16px/1 "Geist Mono", var(--mono);
+    font: 600 22px/1 "Geist Mono", var(--mono);
     transition: background-color 60ms linear, border-color 60ms linear;
 }
 
 .practice .beat-circle.accent {
-    width: 66px;
-    height: 66px;
+    width: 92px;
+    height: 92px;
     border-color: var(--accent);
     box-shadow: 0 0 0 3px rgba(139, 108, 255, 0.25);
     color: #f4f5f7;
@@ -1364,15 +1364,43 @@ button.switch:focus-visible {
     color: #0f1116;
 }
 
-.sub-dot {
-    width: 8px;
-    height: 8px;
+/* A pip between beats: a dot in a bigger target, a ring while silenced */
+.practice .sub-dot {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+}
+
+.sub-dot::after {
+    content: "";
+    width: 12px;
+    height: 12px;
+    box-sizing: border-box;
     border-radius: 50%;
     background: #343846;
 }
 
-.sub-dot.lit {
+.practice .sub-dot:hover::after {
+    background: #4a4f5e;
+}
+
+.sub-dot.lit::after,
+.practice .sub-dot.lit:hover::after {
     background: var(--accent-text);
+}
+
+.sub-dot.muted::after,
+.practice .sub-dot.muted:hover::after {
+    background: transparent;
+    border: 2px solid #343846;
+}
+
+.practice .sub-dot.muted:hover::after {
+    border-color: #4a4f5e;
+}
+
+.sub-dot.muted.lit::after {
+    border-color: var(--accent-text);
 }
 
 .stage-caption {
@@ -1389,8 +1417,8 @@ button.switch:focus-visible {
 }
 
 .practice .bpm-step {
-    width: 48px;
-    height: 48px;
+    width: 40px;
+    height: 40px;
     border-radius: 50%;
     border: 1px solid #343846;
     color: #f4f5f7;
@@ -1410,11 +1438,11 @@ button.switch:focus-visible {
     flex-direction: column;
     align-items: center;
     gap: 4px;
-    min-width: 170px;
+    min-width: 120px;
 }
 
 .bpm-value {
-    font: 600 88px/1 "Geist Mono", var(--mono);
+    font: 600 56px/1 "Geist Mono", var(--mono);
     font-variant-numeric: tabular-nums;
     letter-spacing: -0.02em;
 }
@@ -1463,8 +1491,83 @@ button.switch:focus-visible {
     background: #9a7fff;
 }
 
-.trainer-slot {
+/* The note clicked on: a chip beside Start, opening a menu upward */
+.note-control {
+    position: relative;
     justify-self: start;
+}
+
+.practice .note-chip {
+    gap: 8px;
+    height: 44px;
+    padding: 0 12px 0 14px;
+    border-radius: 10px;
+    border: 1px solid #343846;
+    color: #f4f5f7;
+}
+
+.practice .note-chip:hover,
+.practice .note-chip[aria-expanded="true"] {
+    background: #232733;
+}
+
+.note-chip-label {
+    font-size: 11px;
+    color: var(--muted);
+}
+
+.note-chip-value {
+    font: 600 14px/1 "Geist Mono", var(--mono);
+}
+
+.note-chip > .popover-chevron {
+    color: var(--muted);
+}
+
+.note-popover {
+    position: absolute;
+    left: 0;
+    bottom: calc(100% + 8px);
+    z-index: 2;
+    min-width: 170px;
+    box-sizing: border-box;
+    padding: 4px;
+    display: flex;
+    flex-direction: column;
+    border-radius: 12px;
+    background: var(--surface);
+    border: 1px solid #343846;
+    box-shadow: 0 12px 32px rgba(15, 17, 22, 0.35);
+}
+
+.practice .note-option {
+    justify-content: space-between;
+    gap: 16px;
+    height: 34px;
+    padding: 0 10px;
+    border-radius: 8px;
+    font-size: 13px;
+}
+
+.practice .note-option:hover {
+    background: #232733;
+}
+
+.practice .note-option.selected {
+    background: var(--accent);
+    color: #ffffff;
+}
+
+.note-option-value {
+    font: 600 13px/1 "Geist Mono", var(--mono);
+}
+
+.note-option-name {
+    color: var(--muted);
+}
+
+.note-option.selected .note-option-name {
+    color: rgba(255, 255, 255, 0.75);
 }
 
 .trainer-pill {
@@ -1486,6 +1589,22 @@ button.switch:focus-visible {
     height: 3px;
     border-radius: 50%;
     background: currentColor;
+}
+
+/* Put away until the toolbar's settings button shows it */
+.practice-panel:not(.shown) {
+    display: none;
+}
+
+.toolbar .panel-toggle {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+}
+
+.toolbar .panel-toggle[aria-pressed="true"] {
+    background: #1d2029;
+    color: var(--accent-text);
 }
 
 .practice-panel {
@@ -2134,6 +2253,7 @@ body .compact-only {
     .output-popover,
     .input-popover,
     .metronome-popover,
+    .note-popover,
     .practice-panel.open {
         position: fixed;
         left: 0;
@@ -2157,6 +2277,7 @@ body .compact-only {
     .output-popover::before,
     .input-popover::before,
     .metronome-popover::before,
+    .note-popover::before,
     .practice-panel.open::before {
         content: "";
         position: absolute;
@@ -2225,7 +2346,8 @@ body .compact-only {
         width: 100%;
     }
 
-    .practice-panel {
+    .practice-panel,
+    .practice-panel.shown {
         display: none;
     }
 
@@ -2245,8 +2367,9 @@ body .compact-only {
         font-size: 18px;
     }
 
-    .bpm-value {
-        font-size: 72px;
+    .practice .beat-circle.accent {
+        width: 74px;
+        height: 74px;
     }
 
     .practice .bpm-step {

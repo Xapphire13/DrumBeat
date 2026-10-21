@@ -13,7 +13,9 @@ use crate::{
         metronome_control::MetronomeControl,
         midi_input_control::MidiInputControl,
         playback_bar::format_time,
-        practice_tool::{PracticeTool, use_settings_sheet, use_settings_sheet_provider},
+        practice_tool::{
+            PracticeTool, use_settings_panel, use_settings_sheet, use_settings_sheet_provider,
+        },
         providers::{
             loop_editor::use_loop_editor_provider,
             midi_input::use_midi_input_provider,
@@ -304,10 +306,12 @@ fn MoreMenu() -> Element {
     }
 }
 
-/// Opens the metronome's settings as a sheet, on a phone
+/// Shows or hides the metronome's settings panel, or on a phone opens them
+/// as a sheet
 #[component]
 fn SettingsButton() -> Element {
     let mut open = use_settings_sheet();
+    let mut panel_open = use_settings_panel();
 
     rsx! {
         button {
@@ -315,6 +319,14 @@ fn SettingsButton() -> Element {
             aria_label: "Metronome settings",
             onclick: move |_| open.set(true),
             SlidersHorizontal { size: 20 }
+        }
+        button {
+            class: "panel-toggle regular-only",
+            title: if panel_open() { "Hide settings" } else { "Show settings" },
+            aria_label: "Metronome settings",
+            aria_pressed: panel_open(),
+            onclick: move |_| panel_open.toggle(),
+            SlidersHorizontal { size: 16 }
         }
     }
 }

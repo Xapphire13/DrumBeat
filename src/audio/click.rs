@@ -54,6 +54,16 @@ impl Subdivision {
         }
     }
 
+    /// What the note is called
+    pub fn name(self) -> &'static str {
+        match self {
+            Subdivision::Quarter => "Quarter",
+            Subdivision::Eighth => "Eighth",
+            Subdivision::EighthTriplet => "Triplet",
+            Subdivision::Sixteenth => "Sixteenth",
+        }
+    }
+
     pub fn label(self) -> &'static str {
         match self {
             Subdivision::Quarter => "1/4",

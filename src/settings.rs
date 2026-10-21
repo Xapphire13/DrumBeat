@@ -25,6 +25,14 @@ const SAVE_DELAY: Duration = Duration::from_millis(500);
 pub struct Settings {
     pub audio: AudioSettings,
     pub midi_input: MidiInputSettings,
+    pub metronome: MetronomeViewSettings,
+}
+
+#[derive(Clone, PartialEq, Debug, Default, Deserialize)]
+#[serde(default)]
+pub struct MetronomeViewSettings {
+    /// Whether the metronome's settings panel is shown beside its stage
+    pub panel_open: bool,
 }
 
 #[derive(Clone, PartialEq, Debug, Default, Deserialize)]
@@ -164,6 +172,23 @@ fn update_midi_input(document: &mut DocumentMut, midi_input: &MidiInputSettings)
         return;
     };
     set(table, "port", midi_input.port.as_str().into());
+}
+
+/// Save the metronome view's settings, a moment after they stop changing
+pub fn save_metronome(metronome: &MetronomeViewSettings) {
+    let mut document = document().lock().unwrap_or_else(|e| e.into_inner());
+    update_metronome(&mut document, metronome);
+    schedule_write(document.to_string());
+}
+
+fn update_metronome(document: &mut DocumentMut, metronome: &MetronomeViewSettings) {
+    let table = document
+        .entry("metronome")
+        .or_insert_with(|| Item::Table(Table::new()));
+    let Some(table) = table.as_table_like_mut() else {
+        return;
+    };
+    set(table, "panel_open", metronome.panel_open.into());
 }
 
 /// Set `key` to `value`, keeping any comment on its line
