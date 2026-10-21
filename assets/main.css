@@ -1301,7 +1301,7 @@ button.switch:focus-visible {
     flex-wrap: wrap;
     justify-content: center;
     gap: 14px;
-    min-height: 92px;
+    min-height: 86px;
 }
 
 .practice .beat-circle {
@@ -1317,8 +1317,6 @@ button.switch:focus-visible {
 }
 
 .practice .beat-circle.accent {
-    width: 92px;
-    height: 92px;
     /* White, as violet is the colour of a lit beat */
     border-color: #f4f5f7;
     box-shadow: 0 0 0 3px rgba(244, 245, 247, 0.18);
@@ -1331,17 +1329,13 @@ button.switch:focus-visible {
     color: #4a4f5e;
 }
 
-.practice .beat-circle.lit.normal {
+.practice .beat-circle.lit.normal,
+.practice .beat-circle.lit.accent {
     background: var(--accent);
     border-color: var(--accent);
     color: #ffffff;
 }
 
-.practice .beat-circle.lit.accent {
-    background: #ffffff;
-    border-color: #ffffff;
-    color: #0f1116;
-}
 
 .practice .beat-circle.lit.silent {
     border-color: var(--accent);
@@ -2368,10 +2362,6 @@ body .compact-only {
         font-size: 18px;
     }
 
-    .practice .beat-circle.accent {
-        width: 74px;
-        height: 74px;
-    }
 
     .practice .bpm-step {
         width: 56px;
