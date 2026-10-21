@@ -109,14 +109,13 @@ pub fn Staff(dimensions: StaffDimensions, layout: StaffLayout) -> Element {
         y: y / zoom,
     });
     let phantom_playhead_data = use_phantom_playhead_data(&mouse_position, &scales(), &measures);
-    let mut container = use_signal(|| None::<Rc<MountedData>>);
     // Set by the note heads as the pointer moves over them
     use_context_provider(|| Signal::new(None::<HoveredNote>));
     let span = measures
         .first()
         .zip(measures.last())
         .map(|(first, last)| (first.timestamp, last.end_timestamp()));
-    use_follow_playhead(container, span);
+    use_follow_playhead(span);
 
     let mut loop_editor = use_loop_editor();
 
@@ -162,6 +161,7 @@ pub fn Staff(dimensions: StaffDimensions, layout: StaffLayout) -> Element {
                     current: LoopPoint::Note(anchor),
                     moved: false,
                     by_tab: false,
+                    pressed_at: client_point(&event),
                 });
             }
         }
@@ -184,7 +184,7 @@ pub fn Staff(dimensions: StaffDimensions, layout: StaffLayout) -> Element {
         } else if let Some(point) =
             loop_point_at(&event, by_tab, anchor.timestamp(), anchor_written)
         {
-            loop_editor.drag_to(point);
+            loop_editor.drag_to(point, client_point(&event));
         }
     };
 
@@ -232,6 +232,7 @@ pub fn Staff(dimensions: StaffDimensions, layout: StaffLayout) -> Element {
                 current: LoopPoint::Edge(current),
                 moved: true,
                 by_tab: true,
+                pressed_at: client_point(&event),
             });
         }
     };
@@ -239,10 +240,11 @@ pub fn Staff(dimensions: StaffDimensions, layout: StaffLayout) -> Element {
     rsx! {
         div {
             class: "staff-container",
+            "data-start": span.map_or(0, |(start, _)| start),
+            "data-end": span.map_or(0, |(_, end)| end),
             onmousedown: handle_on_mouse_down,
             onmousemove: handle_on_mouse_move,
             onmouseleave: handle_on_mouse_leave,
-            onmounted: move |event: MountedEvent| container.set(Some(event.data())),
             style: "height: {height * zoom}px",
 
             svg {
@@ -455,59 +457,90 @@ struct TabData {
     current: u32,
 }
 
+/// Where the pointer is in the window, in pixels
+fn client_point(event: &MouseEvent) -> (f64, f64) {
+    let point = event.client_coordinates();
+    (point.x, point.y)
+}
+
 /// Follow the playhead while the score plays. When it plays on to this
 /// staff, the staff is brought to the top so the staves after it can be read
-/// ahead, or, while looping, just far enough to be seen, so going round a
-/// loop over two staves doesn't jump back and forth. Starting to play, or
-/// jumping the playhead while playing, brings the staff into view if it's
-/// out of it. Nothing scrolls while paused, nor for a click on the score,
-/// where the playhead is already in view
-fn use_follow_playhead(container: Signal<Option<Rc<MountedData>>>, span: Option<(u32, u32)>) {
+/// ahead, or, while looping, just far enough to be seen, keeping the whole
+/// loop in view when it fits, so the start of the loop is still there to
+/// read when it comes round. Starting to play, or jumping the playhead while
+/// playing, brings the staff into view if it's out of it. Nothing scrolls
+/// while paused, nor for a click on the score, where the playhead is already
+/// in view
+fn use_follow_playhead(span: Option<(u32, u32)>) {
     let playback_manager = use_playback_manager();
+    let score = use_score_manager();
     // Only changes when the playhead enters or leaves the staff, playback
     // starts or stops, or the playhead is moved by hand, not on every frame
     let state = use_memo(use_reactive!(|span| {
         let timestamp = playback_manager.playhead_timestamp();
         let here = span.is_some_and(|(start, end)| (start..end).contains(&timestamp));
-        let looping = playback_manager.loop_range().is_some();
         (
             here,
             playback_manager.is_playing(),
-            looping,
+            playback_manager.loop_range(),
             playback_manager.seeks(),
+            span,
         )
     }));
-    let previous = use_hook(|| Rc::new(Cell::new((false, false, false, (0, false)))));
+    let previous = use_hook(|| Rc::new(Cell::new((false, false, None, (0, false), None))));
 
     use_effect(move || {
         let current = state();
-        let (here, playing, looping, (seeks, on_score)) = current;
-        let (was_here, was_playing, _, (previous_seeks, _)) = previous.replace(current);
-        if !here || !playing {
+        let (here, playing, loop_range, (seeks, on_score), span) = current;
+        let (was_here, was_playing, _, (previous_seeks, _), _) = previous.replace(current);
+        let Some((staff_start, _)) = span.filter(|_| here && playing) else {
             return;
-        }
+        };
         let jumped = seeks != previous_seeks;
-        let vertical = if !was_playing || (jumped && !on_score) {
-            ScrollLogicalPosition::Nearest
+        let block = if !was_playing || (jumped && !on_score) {
+            "nearest"
         } else if was_here || jumped {
             return;
-        } else if looping {
-            ScrollLogicalPosition::Nearest
+        } else if loop_range.is_some() {
+            "nearest"
         } else {
-            ScrollLogicalPosition::Start
+            "start"
         };
-        let Some(container) = container.peek().clone() else {
-            return;
-        };
-        spawn(async move {
-            let _ = container
-                .scroll_to_with_options(ScrollToOptions {
-                    behavior: ScrollBehavior::Smooth,
-                    vertical,
-                    horizontal: ScrollLogicalPosition::Nearest,
-                })
-                .await;
-        });
+        // The written stretch the loop covers, to keep in view
+        let (loop_start, loop_end) = loop_range
+            .map(|range| range.written_coverage(&score.peek().performance))
+            .and_then(|coverage| Some((coverage.first()?.0, coverage.last()?.1)))
+            .map_or(("null".to_string(), "null".to_string()), |(start, end)| {
+                (start.to_string(), end.to_string())
+            });
+        // Scrolled in the page rather than with `scroll_to_with_options`,
+        // which names its options `vertical` and `horizontal` where
+        // `scrollIntoView` wants `block` and `inline`, so they're ignored and
+        // the staff always goes to the top
+        document::eval(&format!(
+            r#"(() => {{
+            const staff = document.querySelector('.staff-container[data-start="{staff_start}"]');
+            const staves = staff?.closest(".staves");
+            const [loopStart, loopEnd] = [{loop_start}, {loop_end}];
+            const looped = loopStart === null || !staves ? [] : [...staves.querySelectorAll(".staff-container")]
+                .filter((el) => +el.dataset.start < loopEnd && +el.dataset.end > loopStart);
+            const top = (el) => el.getBoundingClientRect().top - staves.getBoundingClientRect().top + staves.scrollTop;
+            if (looped.length > 0) {{
+                const first = looped[0];
+                const last = looped[looped.length - 1];
+                const loopTop = top(first);
+                const loopBottom = top(last) + last.offsetHeight;
+                if (loopBottom - loopTop <= staves.clientHeight) {{
+                    let target = staves.scrollTop;
+                    if (loopTop < target) target = loopTop;
+                    else if (loopBottom > target + staves.clientHeight) target = loopBottom - staves.clientHeight;
+                    if (target !== staves.scrollTop) staves.scrollTo({{ top: target, behavior: "smooth" }});
+                    return;
+                }}
+            }}
+            staff?.scrollIntoView({{ behavior: "smooth", block: "{block}", inline: "nearest" }});
+            }})()"#
+        ));
     });
 }
 

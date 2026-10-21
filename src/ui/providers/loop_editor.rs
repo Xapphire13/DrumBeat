@@ -8,18 +8,24 @@ use crate::{
     ui::providers::playback_manager::PlaybackManager,
 };
 
+/// How far, in window pixels, the pointer goes before a press on the score
+/// becomes a drag
+const DRAG_THRESHOLD: f64 = 4.0;
+
 /// A drag that's setting or changing the loop
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum LoopDrag {
     /// Across the score, or by one of the loop's tabs (`by_tab`). `anchor`
     /// is the end that stays put, written at `anchor_written`, and `current`
-    /// the one under the pointer
+    /// the one under the pointer. `pressed_at` is where the button went down,
+    /// in window pixels
     Score {
         anchor: LoopPoint,
         anchor_written: u32,
         current: LoopPoint,
         moved: bool,
         by_tab: bool,
+        pressed_at: (f64, f64),
     },
     /// Across the measure strip, by index into the played measures
     Measures {
@@ -76,16 +82,21 @@ impl LoopEditor {
         self.drag.set(Some(drag));
     }
 
-    /// Move the dragged end of the loop to `point`
-    pub fn drag_to(&mut self, point: LoopPoint) {
+    /// Move the dragged end of the loop to `point`, with the pointer at `at`
+    /// in window pixels. Until the pointer has gone a few pixels from where
+    /// it was pressed, it's still a click, so a wobble while clicking a note
+    /// moves the playhead rather than looping the note
+    pub fn drag_to(&mut self, point: LoopPoint, at: (f64, f64)) {
         if let Some(LoopDrag::Score {
             anchor,
             anchor_written,
             current,
+            moved,
             by_tab,
-            ..
+            pressed_at,
         }) = self.drag.cloned()
             && current != point
+            && (moved || (at.0 - pressed_at.0).hypot(at.1 - pressed_at.1) >= DRAG_THRESHOLD)
         {
             self.drag.set(Some(LoopDrag::Score {
                 anchor,
@@ -93,6 +104,7 @@ impl LoopEditor {
                 current: point,
                 moved: true,
                 by_tab,
+                pressed_at,
             }));
         }
     }
