@@ -9,7 +9,17 @@
     --mono: ui-monospace, "SF Mono", Menlo, monospace;
 }
 
+/* Sized to the page rather than with vh, which an iPhone's web view can
+   leave stale after rotating, letting the playback bar run into the home
+   indicator's space. Nothing scrolls the page itself */
+html {
+    height: 100%;
+    overflow: hidden;
+}
+
 body {
+    height: 100%;
+    overflow: hidden;
     background-color: #0f1116;
     color: #ffffff;
     font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
@@ -17,7 +27,7 @@ body {
 }
 
 #main {
-    height: 100vh;
+    height: 100%;
     display: flex;
     flex-direction: column;
 }
