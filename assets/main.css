@@ -1355,7 +1355,6 @@ button.switch:focus-visible {
 /* An accented beat has the accent mark from drum notation above it */
 .practice .beat-circle.accent {
     position: relative;
-    color: #f4f5f7;
 }
 
 .practice .beat-circle.accent::before {
