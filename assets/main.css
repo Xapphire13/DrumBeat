@@ -1319,8 +1319,9 @@ button.switch:focus-visible {
 .practice .beat-circle.accent {
     width: 92px;
     height: 92px;
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px rgba(139, 108, 255, 0.25);
+    /* White, as violet is the colour of a lit beat */
+    border-color: #f4f5f7;
+    box-shadow: 0 0 0 3px rgba(244, 245, 247, 0.18);
     color: #f4f5f7;
 }
 
@@ -1354,7 +1355,7 @@ button.switch:focus-visible {
 }
 
 .practice .beat-circle.lit.hollow.accent {
-    border-color: #ffffff;
+    border-color: var(--accent);
 }
 
 /* Counting in, every beat lights amber, whatever it's set to */
