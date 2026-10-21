@@ -32,6 +32,20 @@ body {
     flex-direction: column;
 }
 
+/* A phone on its side ran the page down under the home indicator before the
+   switch from vh, so it keeps vh rather than leaving an empty strip there */
+@media (orientation: landscape) and (pointer: coarse) {
+    html,
+    body {
+        height: auto;
+        overflow: visible;
+    }
+
+    #main {
+        height: 100vh;
+    }
+}
+
 .score {
     position: relative;
     display: flex;
