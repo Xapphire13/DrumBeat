@@ -130,25 +130,29 @@ pub fn PlaybackBar() -> Element {
             div { class: "timeline",
                 span { class: "timeline-time", title: "Time played", "{format_time(elapsed_seconds)}" }
                 div { class: "measure-strip", "aria-hidden": "true",
-                    for group in segments {
-                        if let Some(class) = group.pass_class {
-                            span {
-                                class,
-                                style: "flex: {group.segments.len()} 1 0",
+                    div {
+                        class: "measure-track",
+                        style: "--segments: {loop_bands.len().max(1)}",
+                        for group in segments {
+                            if let Some(class) = group.pass_class {
+                                span {
+                                    class,
+                                    style: "flex: {group.segments.len()} 1 0",
+                                    for (offset, &class) in group.segments.iter().enumerate() {
+                                        StripSegment {
+                                            index: group.first_index + offset,
+                                            class,
+                                            band: loop_bands[group.first_index + offset],
+                                        }
+                                    }
+                                }
+                            } else {
                                 for (offset, &class) in group.segments.iter().enumerate() {
                                     StripSegment {
                                         index: group.first_index + offset,
                                         class,
                                         band: loop_bands[group.first_index + offset],
                                     }
-                                }
-                            }
-                        } else {
-                            for (offset, &class) in group.segments.iter().enumerate() {
-                                StripSegment {
-                                    index: group.first_index + offset,
-                                    class,
-                                    band: loop_bands[group.first_index + offset],
                                 }
                             }
                         }
@@ -420,9 +424,9 @@ impl LoopBand {
         let radius = |rounded: bool| if rounded { "3px" } else { "0" };
         let (start, end) = (radius(self.starts), radius(self.ends));
         // Bridge the gap to the next segment while the loop carries on
-        let bridge = if self.ends { 0 } else { 2 };
+        let bridge = if self.ends { "0px" } else { "var(--strip-gap)" };
         format!(
-            "left: {}%; width: calc({}% + {bridge}px); border-radius: {start} {end} {end} {start}",
+            "left: {}%; width: calc({}% + {bridge}); border-radius: {start} {end} {end} {start}",
             self.from * 100.0,
             (self.to - self.from) * 100.0,
         )

@@ -270,13 +270,22 @@ body {
     margin: 8px 20px 0;
 }
 
+/* A container, so the gaps can be sized against its width */
 .measure-strip {
-    display: flex;
     flex: 1 1 0;
     min-width: 0;
-    align-items: flex-end;
-    gap: 2px;
     height: 14px;
+    container-type: inline-size;
+}
+
+/* The gaps narrow when there are too many segments for 2px ones, so a long
+   score's strip still fits beside the times at its ends */
+.measure-track {
+    --strip-gap: min(2px, 40cqw / var(--segments));
+    display: flex;
+    align-items: flex-end;
+    gap: var(--strip-gap);
+    height: 100%;
 }
 
 .timeline-time {
@@ -304,7 +313,7 @@ body {
     position: relative;
     display: flex;
     flex: 1 1 0;
-    min-width: 1px;
+    min-width: 0;
     cursor: pointer;
 }
 
@@ -328,7 +337,7 @@ body {
 .measure-segment {
     position: relative;
     flex: 1 1 0;
-    min-width: 1px;
+    min-width: 0;
     height: 6px;
     border-radius: 1px;
     background: #2e323d;
@@ -346,7 +355,7 @@ body {
 .repeat-pass-group {
     position: relative;
     display: flex;
-    gap: 2px;
+    gap: var(--strip-gap);
 }
 
 /* Inset a little so the brackets of neighbouring passes stay apart */
