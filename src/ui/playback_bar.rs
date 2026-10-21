@@ -110,23 +110,6 @@ pub fn PlaybackBar() -> Element {
         }
     };
 
-    // What's typed in the BPM box, until it's entered. The bar redraws every
-    // frame while playing, and an input's value is rewritten on each, so
-    // without it the box would keep snapping back to the playing BPM
-    let mut bpm_draft = use_signal(|| None::<String>);
-    let bpm_text = bpm_draft().unwrap_or_else(|| bpm.to_string());
-
-    // Typing a BPM sets the speed that plays the current tempo at it; any
-    // tempo changes in the score scale with it
-    let handle_bpm_change = move |event: FormEvent| {
-        if let Ok(bpm) = event.value().parse::<f64>()
-            && bpm > 0.0
-        {
-            playback_manager.set_speed(bpm / score_bpm);
-        }
-        bpm_draft.set(None);
-    };
-
     let handle_reset_speed = move |_: MouseEvent| playback_manager.set_speed(1.0);
 
     // Tempo is a chip showing the speed and BPM, with the controls in a
@@ -270,11 +253,7 @@ pub fn PlaybackBar() -> Element {
                             title: "Playback speed, relative to the score's tempo",
                             aria_haspopup: "dialog",
                             aria_expanded: tempo_open(),
-                            onclick: move |_| {
-                                // A draft left when Escape closed the popover is dropped
-                                bpm_draft.set(None);
-                                tempo_open.set(!tempo_open());
-                            },
+                            onclick: move |_| tempo_open.set(!tempo_open()),
                             Gauge { size: 16 }
                             span { class: "tempo-chip-speed", "{speed_percent}%" }
                             span { class: "tempo-chip-bpm", "{bpm} BPM" }
@@ -319,24 +298,50 @@ pub fn PlaybackBar() -> Element {
                                         "{speed_percent}%"
                                         RotateCcw { size: 13 }
                                     }
-                                    label { class: "bpm-field",
-                                        input {
-                                            r#type: "number",
-                                            title: "Play at an exact tempo",
-                                            min: 1,
-                                            value: bpm_text,
-                                            oninput: move |event: FormEvent| bpm_draft.set(Some(event.value())),
-                                            onchange: handle_bpm_change,
-                                            onblur: move |_| bpm_draft.set(None),
-                                        }
-                                        "BPM"
-                                    }
+                                    BpmField { bpm, score_bpm }
                                 }
                             }
                         }
                     }
                 }
             }
+        }
+    }
+}
+
+/// The box for typing an exact BPM. It's its own component so it redraws
+/// only when the BPM shown changes: the playback bar redraws every frame
+/// while playing, and an input's value is rewritten each time, which would
+/// undo what's being typed
+#[component]
+fn BpmField(bpm: f64, score_bpm: f64) -> Element {
+    let mut playback_manager = use_playback_manager();
+    // Bumped to redraw the box, putting back the BPM after an entry that
+    // didn't change it
+    let mut revision = use_signal(|| 0u32);
+    let _ = revision();
+
+    // Typing a BPM sets the speed that plays the current tempo at it; any
+    // tempo changes in the score scale with it
+    let handle_change = move |event: FormEvent| {
+        if let Ok(bpm) = event.value().parse::<f64>()
+            && bpm > 0.0
+        {
+            playback_manager.set_speed(bpm / score_bpm);
+        }
+        revision += 1;
+    };
+
+    rsx! {
+        label { class: "bpm-field",
+            input {
+                r#type: "number",
+                title: "Play at an exact tempo",
+                min: 1,
+                value: bpm,
+                onchange: handle_change,
+            }
+            "BPM"
         }
     }
 }
