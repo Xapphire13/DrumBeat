@@ -83,6 +83,8 @@ pub struct PracticeOptions {
     pub trainer_on: bool,
     pub trainer: SpeedTrainer,
     pub silent_bars: bool,
+    /// Bars counted in on Start
+    pub count_in_bars: u32,
 }
 
 impl Default for PracticeOptions {
@@ -103,6 +105,7 @@ impl Default for PracticeOptions {
                 up_to_bpm: 140.0,
             },
             silent_bars: false,
+            count_in_bars: 0,
         }
     }
 }
@@ -117,6 +120,7 @@ impl PracticeOptions {
             sound: self.sound_on.then_some(self.sound),
             trainer: self.trainer_on.then_some(self.trainer),
             silent_bars: self.silent_bars,
+            count_in_bars: self.count_in_bars,
         }
     }
 }
@@ -128,7 +132,10 @@ pub struct PracticeMetronome {
     options: Signal<PracticeOptions>,
     /// When the current run started, while it's running
     started_at: Signal<Option<Instant>>,
-    /// Time practised in earlier runs
+    /// When the time practised in the current run started counting, which
+    /// is after its count-in, or since the timer was reset
+    counting_since: Signal<Option<Instant>>,
+    /// Time practised in earlier runs, or since the timer was reset
     practised_before: Signal<Duration>,
     /// Whole seconds practised in all, counting the current run
     practised_seconds: Signal<u32>,
@@ -180,11 +187,13 @@ impl PracticeMetronome {
     }
 
     pub fn stop(&mut self) {
-        let Some(started_at) = self.started_at.take() else {
+        if self.started_at.take().is_none() {
             return;
-        };
+        }
         audio::stop_practice();
-        self.practised_before += started_at.elapsed();
+        if let Some(counting_since) = self.counting_since.take() {
+            self.practised_before += counting_since.elapsed();
+        }
         self.click.set(None);
     }
 
@@ -237,12 +246,26 @@ impl PracticeMetronome {
     pub fn practised_seconds(&self) -> u32 {
         (self.practised_seconds)()
     }
+
+    /// Start the time practised again from nothing, and the bars from 1 at
+    /// the next downbeat, keeping the beat going
+    pub fn reset_practised(&mut self) {
+        self.practised_before.set(Duration::ZERO);
+        self.practised_seconds.set(0);
+        if self.counting_since.peek().is_some() {
+            self.counting_since.set(Some(Instant::now()));
+        }
+        if self.started_at.peek().is_some() {
+            audio::restart_practice_bars();
+        }
+    }
 }
 
 pub fn use_practice_provider() -> PracticeMetronome {
     let practice = use_context_provider(|| PracticeMetronome {
         options: Signal::new(PracticeOptions::default()),
         started_at: Signal::new(None),
+        counting_since: Signal::new(None),
         practised_before: Signal::new(Duration::ZERO),
         practised_seconds: Signal::new(0),
         click: Signal::new(None),
@@ -257,19 +280,29 @@ pub fn use_practice_provider() -> PracticeMetronome {
         async move {
             loop {
                 tokio::time::sleep(POLL_INTERVAL).await;
-                let Some(started_at) = *practice.started_at.peek() else {
+                if practice.started_at.peek().is_none() {
                     continue;
-                };
+                }
                 let click = audio::click_status();
                 if click != *practice.click.peek() {
                     practice.click.set(click);
                 }
+                // The time practised starts once the count-in is over
+                if click.is_some_and(|click| !click.count_in)
+                    && practice.counting_since.peek().is_none()
+                {
+                    practice.counting_since.set(Some(Instant::now()));
+                }
+                let Some(counting_since) = *practice.counting_since.peek() else {
+                    continue;
+                };
                 let (tempo_id, bpm) = audio::practice_bpm();
                 let bpm = bpm.round() as u32;
                 if tempo_id == *practice.tempo_id.peek() && bpm != *practice.live_bpm.peek() {
                     practice.live_bpm.set(bpm);
                 }
-                let seconds = (*practice.practised_before.peek() + started_at.elapsed()).as_secs();
+                let seconds =
+                    (*practice.practised_before.peek() + counting_since.elapsed()).as_secs();
                 let seconds = u32::try_from(seconds).unwrap_or(u32::MAX);
                 if seconds != *practice.practised_seconds.peek() {
                     practice.practised_seconds.set(seconds);

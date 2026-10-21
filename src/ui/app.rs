@@ -2,7 +2,8 @@
 
 use dioxus::prelude::*;
 use lucide_dioxus::{
-    Ellipsis, FolderOpen, Metronome, SkipBack, SkipForward, SlidersHorizontal, X, ZoomIn, ZoomOut,
+    Ellipsis, FolderOpen, Metronome, RotateCcw, SkipBack, SkipForward, SlidersHorizontal, X,
+    ZoomIn, ZoomOut,
 };
 
 use crate::{
@@ -164,16 +165,26 @@ fn ViewTabs() -> Element {
     }
 }
 
-/// How long the practice metronome has run this session
+/// How long the practice metronome has run this session, with a button to
+/// start counting again, say between rudiments
 #[component]
 fn PracticeTimer() -> Element {
-    let practice = use_practice();
+    let mut practice = use_practice();
 
     rsx! {
-        span { class: "practice-timer", title: "Time practised with the metronome this session",
-            "Practiced "
-            span { class: "practice-timer-time",
-                {format_time(f64::from(practice.practised_seconds()))}
+        div { class: "practice-timer",
+            span { title: "Time practised with the metronome this session",
+                "Practiced "
+                span { class: "practice-timer-time",
+                    {format_time(f64::from(practice.practised_seconds()))}
+                }
+            }
+            button {
+                class: "practice-timer-reset",
+                title: "Reset the time and bar count",
+                aria_label: "Reset the time and bar count",
+                onclick: move |_| practice.reset_practised(),
+                RotateCcw { size: 14 }
             }
         }
     }

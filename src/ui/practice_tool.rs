@@ -19,6 +19,9 @@ const SOUNDS: [ClickSound; 4] = [
     ClickSound::Cowbell,
 ];
 
+/// The count-ins offered, in bars
+const COUNT_IN_BARS: [u32; 3] = [0, 1, 2];
+
 /// Only taps this recent count towards the tempo, so it follows a change of
 /// pace quickly
 const TAP_WINDOW: Duration = Duration::from_millis(2500);
@@ -86,6 +89,11 @@ fn Stage() -> Element {
     };
 
     let caption = match click {
+        Some(click) if click.count_in => {
+            // Beats left to count, down to the first of bar 1
+            let left = (click.bar - 1) * click.beats + click.beats - click.beat;
+            format!("Count-in · {left}")
+        }
         Some(_) if silent_bar => "Silent bar · keep time".to_string(),
         Some(click) => format!("Bar {}", click.bar),
         None if platform::HAS_HOVER => {
@@ -379,6 +387,17 @@ fn SidePanel() -> Element {
             section { class: "panel-section",
                 h2 { class: "control-label", "Practice" }
                 div { class: "panel-row",
+                    span { "Count-in" }
+                    Segmented {
+                        label: "Count-in",
+                        options: COUNT_IN_BARS
+                            .iter()
+                            .map(|&bars| SegmentOption::new(count_in_label(bars), options.count_in_bars == bars))
+                            .collect::<Vec<_>>(),
+                        onselect: move |i: usize| practice.update(|o| o.count_in_bars = COUNT_IN_BARS[i]),
+                    }
+                }
+                div { class: "panel-row",
                     div { class: "panel-row-text",
                         span { "Speed trainer" }
                         span { class: "panel-hint",
@@ -469,6 +488,9 @@ fn beat_class(kind: BeatKind, beat: usize, click: Option<ClickPosition>) -> Stri
         && click.beat as usize == beat
     {
         class.push_str(" lit");
+        if click.count_in {
+            class.push_str(" counting-in");
+        }
         if click.silent {
             class.push_str(" hollow");
         }
@@ -486,6 +508,14 @@ fn tapped_bpm(taps: &[Instant]) -> Option<u32> {
             .round()
             .clamp(f64::from(MIN_BPM), f64::from(MAX_BPM)) as u32
     })
+}
+
+fn count_in_label(bars: u32) -> &'static str {
+    match bars {
+        0 => "Off",
+        1 => "1 bar",
+        _ => "2 bars",
+    }
 }
 
 fn ordinal(n: u32) -> String {

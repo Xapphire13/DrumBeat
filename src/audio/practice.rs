@@ -34,6 +34,8 @@ pub struct PracticeSettings {
     pub sound: Option<ClickSound>,
     pub trainer: Option<SpeedTrainer>,
     pub silent_bars: bool,
+    /// Bars counted in when it starts, before bar 1
+    pub count_in_bars: u32,
     /// Changes whenever `bpm` is set, so the tempo reported back from before
     /// a change can be told apart from the tempo after it
     pub tempo_id: u32,
@@ -57,17 +59,23 @@ pub struct Practice {
     bar: u32,
     beat: u32,
     sub: u32,
+    /// Bars of the count-in still to play, the current one included
+    count_in_left: u32,
+    /// Whether the bars are counted from 1 again from the next downbeat
+    restart_pending: bool,
 }
 
 impl Practice {
     pub fn new(settings: PracticeSettings) -> Self {
         Self {
             bpm: settings.bpm,
+            count_in_left: settings.count_in_bars,
             settings,
             until_next: 0.0,
             bar: 0,
             beat: 0,
             sub: 0,
+            restart_pending: false,
         }
     }
 
@@ -84,8 +92,15 @@ impl Practice {
         if self.beat >= self.beats() {
             self.beat = 0;
             self.sub = 0;
-            self.bar += 1;
+            self.next_bar();
         }
+    }
+
+    /// Count the bars from 1 again, from the next downbeat, without losing
+    /// the beat
+    pub fn restart_bars(&mut self) {
+        // Counting in, bar 1 is still to come
+        self.restart_pending = self.count_in_left == 0;
     }
 
     pub fn bpm(&self) -> f64 {
@@ -118,6 +133,9 @@ impl Practice {
     }
 
     fn click(&self) -> PracticeClick {
+        if self.count_in_left > 0 {
+            return self.count_in_click();
+        }
         let silent = self.settings.silent_bars && (self.bar + 1).is_multiple_of(SILENT_BAR_EVERY);
         let beat_kind = self
             .settings
@@ -145,6 +163,28 @@ impl Practice {
         }
     }
 
+    /// A click of the count-in: every beat heard, the first accented, and
+    /// nothing between them. Its bars count down to the music
+    fn count_in_click(&self) -> PracticeClick {
+        let kind = match (self.sub, self.beat) {
+            _ if self.settings.sound.is_none() => None,
+            (0, 0) => Some(ClickKind::Accent),
+            (0, _) => Some(ClickKind::Beat),
+            _ => None,
+        };
+        PracticeClick {
+            kind,
+            position: ClickPosition {
+                bar: self.count_in_left,
+                beat: self.beat,
+                sub: self.sub,
+                beats: self.beats(),
+                count_in: true,
+                silent: false,
+            },
+        }
+    }
+
     fn step(&mut self, per_beat: u32) {
         self.sub += 1;
         if self.sub < per_beat {
@@ -156,6 +196,18 @@ impl Practice {
             return;
         }
         self.beat = 0;
+        self.next_bar();
+    }
+
+    fn next_bar(&mut self) {
+        if self.count_in_left > 0 {
+            self.count_in_left -= 1;
+            return;
+        }
+        if std::mem::take(&mut self.restart_pending) {
+            self.bar = 0;
+            return;
+        }
         self.bar += 1;
         if let Some(trainer) = self.settings.trainer
             && trainer.every_bars > 0
@@ -179,6 +231,7 @@ mod tests {
             sound: Some(ClickSound::Click),
             trainer: None,
             silent_bars: false,
+            count_in_bars: 0,
             tempo_id: 0,
         }
     }
@@ -268,5 +321,41 @@ mod tests {
         let clicks = run(&mut practice, 100);
         let subs: Vec<_> = clicks.iter().map(|(_, c)| c.position.sub).collect();
         assert_eq!(subs, [0, 1, 2, 3]);
+    }
+
+    #[test]
+    fn counts_in_before_bar_one() {
+        let mut practice = Practice::new(PracticeSettings {
+            count_in_bars: 1,
+            ..settings()
+        });
+        let clicks = run(&mut practice, 400);
+        let positions: Vec<_> = clicks
+            .iter()
+            .map(|(_, c)| (c.position.count_in, c.position.bar, c.kind))
+            .collect();
+        assert_eq!(
+            positions,
+            [
+                (true, 1, Some(ClickKind::Accent)),
+                // A silenced beat is still heard counting in
+                (true, 1, Some(ClickKind::Beat)),
+                (true, 1, Some(ClickKind::Beat)),
+                (false, 1, Some(ClickKind::Accent)),
+            ]
+        );
+    }
+
+    #[test]
+    fn restarts_the_bars_from_the_next_downbeat() {
+        let mut practice = Practice::new(settings());
+        // Into bar 2
+        run(&mut practice, 350);
+        practice.restart_bars();
+        let bars: Vec<_> = run(&mut practice, 400)
+            .iter()
+            .map(|(_, c)| (c.position.bar, c.position.beat))
+            .collect();
+        assert_eq!(bars, [(2, 1), (2, 2), (1, 0), (1, 1)]);
     }
 }

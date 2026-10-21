@@ -112,6 +112,7 @@ enum Command {
     Stop,
     StartPractice(PracticeSettings),
     UpdatePractice(PracticeSettings),
+    RestartPracticeBars,
     StopPractice,
 }
 
@@ -165,6 +166,11 @@ pub fn start_practice(settings: PracticeSettings) {
 /// Change the practice metronome's settings while it plays, keeping the beat
 pub fn update_practice(settings: PracticeSettings) {
     send(Command::UpdatePractice(settings));
+}
+
+/// Count the practice metronome's bars from 1 again, from its next downbeat
+pub fn restart_practice_bars() {
+    send(Command::RestartPracticeBars);
 }
 
 pub fn stop_practice() {
@@ -610,6 +616,11 @@ impl Mixer {
             Command::UpdatePractice(settings) => {
                 if let Some(practice) = &mut self.practice {
                     practice.update(settings);
+                }
+            }
+            Command::RestartPracticeBars => {
+                if let Some(practice) = &mut self.practice {
+                    practice.restart_bars();
                 }
             }
             Command::StopPractice => {

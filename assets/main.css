@@ -939,10 +939,24 @@ body {
 }
 
 .practice-timer {
+    display: flex;
+    align-items: center;
+    gap: 6px;
     margin-left: auto;
     font-size: 12px;
     color: var(--muted);
     white-space: nowrap;
+}
+
+.toolbar .practice-timer-reset {
+    width: 26px;
+    height: 26px;
+    border-radius: 6px;
+    color: var(--muted);
+}
+
+.toolbar .practice-timer-reset:hover {
+    color: #f4f5f7;
 }
 
 .practice-timer-time {
@@ -1341,6 +1355,13 @@ button.switch:focus-visible {
 
 .practice .beat-circle.lit.hollow.accent {
     border-color: #ffffff;
+}
+
+/* Counting in, every beat lights amber, whatever it's set to */
+.practice .beat-circle.lit.counting-in {
+    background: #f0b45a;
+    border-color: #f0b45a;
+    color: #0f1116;
 }
 
 .sub-dot {
