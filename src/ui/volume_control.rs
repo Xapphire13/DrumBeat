@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use dioxus::prelude::*;
-use lucide_dioxus::{ChevronUp, Drum, RefreshCw, Volume1, Volume2, VolumeX};
+use lucide_dioxus::{ChevronUp, Drum, Volume1, Volume2, VolumeX};
 
 use crate::{
     audio::{self, midi},
@@ -14,6 +14,11 @@ use crate::{
 
 /// How long the activity dot stays lit after a note is sent
 const ACTIVITY_LIT: Duration = Duration::from_millis(120);
+
+/// How often the ports are looked for while the menu is open, so a device
+/// plugged in meanwhile shows up, and a missing one is connected once it's
+/// back
+const LOOK_INTERVAL: Duration = Duration::from_secs(1);
 
 /// How often the activity dot and the port's status are checked
 const POLL_INTERVAL: Duration = Duration::from_millis(40);
@@ -48,6 +53,21 @@ pub fn VolumeControl() -> Element {
             let found = midi::ports();
             if found != *ports.peek() {
                 ports.set(found);
+            }
+        }
+    });
+
+    use_future(move || async move {
+        loop {
+            tokio::time::sleep(LOOK_INTERVAL).await;
+            if !open() || playback_manager.drums_output() != DrumsOutput::Midi {
+                continue;
+            }
+            midi::refresh_ports();
+            if *status.peek() == midi::Status::Missing
+                && ports.peek().contains(&playback_manager.midi_port())
+            {
+                playback_manager.reconnect_midi();
             }
         }
     });
@@ -207,19 +227,7 @@ pub fn VolumeControl() -> Element {
                     }
                     if is_midi {
                         div { class: "popover-field",
-                            div { class: "field-header",
-                                span { class: "control-label", "Port" }
-                                button {
-                                    class: "small-button",
-                                    title: "Look for ports again",
-                                    onclick: move |_| {
-                                        refresh_ports();
-                                        playback_manager.reconnect_midi();
-                                    },
-                                    RefreshCw { size: 12 }
-                                    "Refresh"
-                                }
-                            }
+                            span { class: "control-label", "Port" }
                             div {
                                 class: "port-list",
                                 role: "radiogroup",

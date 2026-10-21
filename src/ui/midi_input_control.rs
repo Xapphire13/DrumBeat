@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use dioxus::prelude::*;
-use lucide_dioxus::{Bluetooth, ChevronDown, Drum, RefreshCw};
+use lucide_dioxus::{Bluetooth, ChevronDown, Drum};
 
 use crate::{
     audio::midi_in::{ReceivedHit, Status},
@@ -143,23 +143,14 @@ pub fn MidiInputControl() -> Element {
                         span { class: "popover-subtitle", "The drum kit or pads you play" }
                     }
                     div { class: "popover-field",
-                        div { class: "field-header",
-                            span { class: "control-label", "Device" }
-                            button {
-                                class: "small-button",
-                                title: "Look for devices again",
-                                onclick: move |_| input.refresh(),
-                                RefreshCw { size: 12 }
-                                "Refresh"
-                            }
-                        }
+                        span { class: "control-label", "Device" }
                         div {
                             class: "port-list",
                             role: "radiogroup",
                             aria_label: "Device",
                             if listed.is_empty() {
                                 p { class: "empty-ports",
-                                    "No MIDI inputs found. Plug your kit in, then Refresh."
+                                    "No MIDI inputs found. Plug your kit in."
                                 }
                             } else {
                                 button {

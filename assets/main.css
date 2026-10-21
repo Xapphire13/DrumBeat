@@ -588,21 +588,6 @@ body {
     cursor: default;
 }
 
-.field-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-}
-
-:is(.toolbar, .playback-bar) .small-button {
-    gap: 4px;
-    height: 22px;
-    padding: 0 6px;
-    border-radius: 6px;
-    color: var(--muted);
-    font-size: 12px;
-}
-
 .port-list {
     display: flex;
     flex-direction: column;
@@ -2197,14 +2182,6 @@ body .compact-only {
     .input-popover .port-list {
         max-height: none;
         border-radius: 12px;
-    }
-
-    .toolbar .input-popover .small-button {
-        height: 32px;
-        padding: 0 10px;
-        border: 1px solid var(--border);
-        border-radius: 8px;
-        font-size: 13px;
     }
 
     .input-popover :is(.popover-subtitle, .hint, .status) {
