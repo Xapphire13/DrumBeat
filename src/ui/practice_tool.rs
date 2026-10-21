@@ -565,8 +565,10 @@ fn beat_class(kind: BeatKind, beat: usize, click: Option<ClickPosition>) -> Stri
         BeatKind::Normal => " normal",
         BeatKind::Silent => " silent",
     });
+    // Lit only for the beat itself, so the light moves on to the pips after it
     if let Some(click) = click
         && click.beat as usize == beat
+        && click.sub == 0
     {
         class.push_str(" lit");
         if click.count_in {
